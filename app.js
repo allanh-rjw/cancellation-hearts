@@ -60,7 +60,7 @@ const state = {
   players: [], dealer: 0, round: 1, target: 100, difficulty: 'medium',
   currentPlayer: 0, leader: 0, trick: [], trickNumber: 0, heartsBroken: false,
   phase: 'idle', selected: new Set(), passOffset: 1, gameOver: false, coachStrategy: null,
-  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[]
+  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null
 };
 
 const $ = id => document.getElementById(id);
@@ -85,7 +85,17 @@ $('gameMode').onchange = renderModeSetup;
 $('coachBtn').onclick = ()=>{ $('coachPanel').classList.remove('hidden'); $('playLayout').classList.add('coach-open'); renderCoach(); };
 $('closeCoachBtn').onclick = ()=>{ $('coachPanel').classList.add('hidden'); $('playLayout').classList.remove('coach-open'); };
 $('refreshCoachBtn').onclick = renderCoach;
-$('strategySelect').onchange = ()=>{ if(state.mode==='practice'){ $('strategySelect').value=state.coachStrategy; return; } state.coachStrategy=$('strategySelect').value; renderStrategyOverview(); renderRejectedStrategies(); renderPassingRecommendations(); renderTrickCoach(); renderCardRecommendation(); };
+$('strategySelect').onchange = ()=>{
+  if(state.mode==='practice'){ $('strategySelect').value=state.coachStrategy; return; }
+  const next=$('strategySelect').value;
+  if(state.phase==='playing' && state.coachStrategy && next!==state.coachStrategy){
+    recordStrategyPivot(next,'Player changed strategy from the Recommended Strategy tab.');
+  } else {
+    state.coachStrategy=next;
+    if(!state.originalStrategy || state.phase==='passing') state.originalStrategy=next;
+  }
+  renderStrategyOverview(); renderRejectedStrategies(); renderPassingRecommendations(); renderTrickCoach(); renderCardRecommendation();
+};
 document.querySelectorAll('.coach-tab').forEach(b=>b.onclick=()=>activateCoachTab(b.dataset.tab));
 ['boardWeight','scoreWeight','strategyWeight'].forEach(id=>$(id).oninput=updateCoachWeights);
 $('resetWeightsBtn').onclick=()=>{ $('boardWeight').value=33; $('scoreWeight').value=33; $('strategyWeight').value=34; updateCoachWeights(); };
@@ -154,7 +164,7 @@ function startGame(){
 
 function beginRound(){
   state.practiceEnded=false;
-  state.phase = 'dealing'; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null;
+  state.phase = 'dealing'; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.originalStrategy=null; state.strategyPivots=[]; state.pendingPivot=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null;
   state.players.forEach(p=>{p.hand=[]; p.roundPoints=0; p.tricks=[];});
   if(state.mode==='practice') dealPracticeRound();
   else {
@@ -713,7 +723,7 @@ function renderCoach(){
     ['What kind of hand is this?',`The coach currently classifies this as a ${STRATEGY_LABELS[recommendedStrategy(m)].toLowerCase()} hand.`,m.control>=6?'It has enough control to consider aggressive play, but the pass and first tricks must confirm that control.':'Its strength lies more in flexibility and damage control than in dominating every penalty trick.']
   ];
   $('coachAssessment').innerHTML=sections.map(([h,a,b])=>`<div class="assessment-card"><h4>${h}</h4>${bullets(a,b)}</div>`).join('');
-  const rec=state.mode==='practice'?(state.practiceType==='solo'?'soloMoon':'twoMoon'):recommendedStrategy(m); state.coachStrategy=state.mode==='practice'?rec:(state.coachStrategy||rec);
+  const rec=state.mode==='practice'?(state.practiceType==='solo'?'soloMoon':'twoMoon'):recommendedStrategy(m); state.coachStrategy=state.mode==='practice'?rec:(state.coachStrategy||rec); if(!state.originalStrategy) state.originalStrategy=state.coachStrategy;
   $('coachRecommendation').innerHTML=`<strong>Recommended: ${STRATEGY_LABELS[rec]}</strong><br>${strategySummary(rec)}`;
   $('strategySelect').value=state.coachStrategy;
   $('coachSubtitle').textContent=state.mode==='practice'?`${({ridiculous:'Ridiculously strong',strong:'Strong',solid:'Solid',marginal:'Marginal'})[state.practiceStrength]} ${state.practiceType==='solo'?'solo':'two-player'} moon practice · ${m.hand.length} cards`:`Round ${state.round}, ${state.phase==='passing'?'before the pass is complete':'current hand'} · ${m.hand.length} cards`;
@@ -794,6 +804,55 @@ function renderStrategyOverview(){
   $('strategyOverview').innerHTML=`<strong>Operating plan</strong><p>${strategySummary(state.coachStrategy)}</p>${extra}`;
 }
 function cardLabel(c){return `${c.rank}${SUIT_SYMBOL[c.suit]}`;}
+
+function currentPenaltyCollectors(){
+  return state.players.map((p,i)=>({i,points:p.roundPoints})).filter(x=>x.points>0);
+}
+function strategyViability(strategy){
+  const collectors=currentPenaltyCollectors();
+  if(strategy==='soloMoon'){
+    const outsider=collectors.find(x=>x.i!==0);
+    if(outsider) return {viable:false,reason:`${state.players[outsider.i].name} has already captured ${outsider.points} penalty point${outsider.points===1?'':'s'}, so a solo moon is no longer possible.`,suggestions:['twoMoon','avoidance','targeting','cancellation']};
+  }
+  if(strategy==='twoMoon'){
+    if(state.mode==='practice' && state.partnerIndex!=null){
+      const outsider=collectors.find(x=>x.i!==0&&x.i!==state.partnerIndex);
+      if(outsider) return {viable:false,reason:`${state.players[outsider.i].name} has captured penalty points outside the You–Partner pair, so the two-player moon is broken.`,suggestions:['avoidance','targeting','cancellation']};
+    } else if(collectors.length>2){
+      return {viable:false,reason:`Penalty points are now spread across ${collectors.length} players, so they can no longer be concentrated between exactly two shooters.`,suggestions:['avoidance','targeting','cancellation']};
+    }
+  }
+  return {viable:true,reason:'',suggestions:[]};
+}
+function pivotReasonFor(strategy){
+  if(strategy==='avoidance') return 'Shift to damage control: shed exposed winners, preserve low exits, and avoid collecting additional penalty cards.';
+  if(strategy==='targeting') return 'Redirect the hand toward the current leader: preserve cards that can place points deliberately rather than dumping them at the first opportunity.';
+  if(strategy==='cancellation') return 'Use known duplicate locations and cancellation chains to control who wins, while avoiding cancellations that promote an outsider.';
+  if(strategy==='twoMoon') return 'Treat the second scorer as the prospective partner and keep every remaining penalty card within those two piles.';
+  return strategySummary(strategy);
+}
+function renderPivotAlert(container){
+  if(!container || state.mode==='practice') return false;
+  const viability=strategyViability(state.coachStrategy);
+  if(viability.viable){ state.pendingPivot=null; return false; }
+  state.pendingPivot={from:state.coachStrategy,reason:viability.reason,suggestions:viability.suggestions};
+  const opts=viability.suggestions.map(s=>`<option value="${s}">${STRATEGY_LABELS[s]}</option>`).join('');
+  container.innerHTML=`<div class="pivot-alert"><h4>Strategy change needed</h4><p>${viability.reason}</p><label for="pivotStrategySelect">Choose the new strategy</label><select id="pivotStrategySelect">${opts}</select><p id="pivotStrategyExplanation" class="evidence">${pivotReasonFor(viability.suggestions[0])}</p><button id="confirmPivotBtn" class="primary compact">Adopt new strategy</button></div>`+container.innerHTML;
+  const sel=$('pivotStrategySelect');
+  if(sel) sel.onchange=()=>{$('pivotStrategyExplanation').textContent=pivotReasonFor(sel.value);};
+  const btn=$('confirmPivotBtn');
+  if(btn) btn.onclick=()=>recordStrategyPivot(sel.value,viability.reason);
+  return true;
+}
+function recordStrategyPivot(next,reason){
+  const from=state.coachStrategy;
+  if(!next || next===from) return;
+  state.strategyPivots.push({from,to:next,trick:state.trickNumber+1,reason,decisionIndex:state.humanDecisionLog.length});
+  state.coachStrategy=next; state.pendingPivot=null;
+  $('strategySelect').value=next;
+  renderStrategyOverview(); renderTrickCoach(); renderCardRecommendation(); renderPassingRecommendations();
+}
+
 function renderTrickCoach(){
   if(!state.players.length) return;
   const box=$('trickCoach');
@@ -824,6 +883,8 @@ function renderTrickCoach(){
     const scorers=state.players.map((p,i)=>({p,i})).filter(x=>x.p.roundPoints>0);
     tips=[`All penalty cards must remain with exactly two scorers; currently there ${scorers.length===1?'is 1 scorer':`are ${scorers.length} scorers`}.`,`Identify the intended second collector and avoid allowing any third player to win a penalty-bearing trick.`,`Use voids to feed penalty cards to the partner collector rather than simply minimizing your own score.`];
   }
+  const viability=strategyViability(state.coachStrategy);
+  if(!viability.viable && state.mode!=='practice') tips.unshift(`Strategy change needed: ${viability.reason}`);
   box.innerHTML=bullets(...tips);
   renderCardRecommendation(); renderOpponentAnalysis();
 }
@@ -1112,12 +1173,12 @@ function recommendationReason(card,f){
 function renderCardRecommendation(){
   const box=$('cardRecommendation'); if(!box||!state.players.length)return;
   if(state.phase==='passing'){box.innerHTML='<p>Select a strategy first. Passing guidance appears under Execution guidance.</p>';return;}
-  if(state.phase!=='playing'||state.currentPlayer!==0){box.innerHTML='<p>The coach will rank legal cards when it is your turn. Meanwhile, watch for voids, cancellations, and who is collecting points.</p>';return;}
+  if(state.phase!=='playing'||state.currentPlayer!==0){box.innerHTML='<p>The coach will rank legal cards when it is your turn. Meanwhile, watch for voids, cancellations, and who is collecting points.</p>'; renderPivotAlert(box); return;}
   const ranked=rankHumanLegalCards(); if(!ranked.length){box.innerHTML='<p>No legal card is available.</p>';return;}
   const r=ranked[0];
   const bars=[['Board',r.board],['Score',r.score],['Strategy',r.strategy]].map(([n,v])=>`<div class="factor-row"><span>${n}</span><div class="factor-track"><div class="factor-fill" style="width:${v}%"></div></div><strong>${Math.round(v)}</strong></div>`).join('');
   const alternatives=ranked.slice(1,3).map(x=>`${cardLabel(x.card)} (${Math.round(x.total)})`).join(' · ');
-  box.innerHTML=`<div class="recommended-card">Play ${cardLabel(r.card)}</div><p>${r.reason}</p><div class="factor-bars">${bars}</div>${alternatives?`<p class="small-copy">Next-best options: ${alternatives}</p>`:''}`;
+  box.innerHTML=`<div class="recommended-card">Play ${cardLabel(r.card)}</div><p>${r.reason}</p><div class="factor-bars">${bars}</div>${alternatives?`<p class="small-copy">Next-best options: ${alternatives}</p>`:''}`; renderPivotAlert(box);
 }
 function inferOpponent(playerIndex){
   const acts=state.actionLog.filter(a=>a.player===playerIndex); const scores=Object.fromEntries(PERSONAS.map(p=>[p,0])); const examples=[];
@@ -1135,16 +1196,50 @@ function inferOpponent(playerIndex){
   return {persona:top[1]===0?'Insufficient evidence':top[0],confidence,examples:[...new Set(examples)].slice(-2),plays:acts.length};
 }
 function renderOpponentAnalysis(){const box=$('opponentAnalysis');if(!box||!state.players.length)return;box.innerHTML=state.players.slice(1).map((p,j)=>{const a=inferOpponent(j+1);return `<div class="opponent-card"><h4>${p.name}</h4><div class="confidence">Likely: ${a.persona} · ${a.confidence} confidence · ${a.plays} observed plays</div>${a.examples.length?a.examples.map(e=>`<p class="evidence">• ${e}</p>`).join(''):'<p class="evidence">Not enough distinctive play has occurred yet.</p>'}</div>`}).join('');}
-function buildPostGameAnalysis(roundMessage){
-  const decisions=state.humanDecisionLog, matches=decisions.filter(d=>d.matched).length, adherence=decisions.length?matches/decisions.length:0;
-  const pts=state.players[0].roundPoints, selected=state.coachStrategy; let strategyOutcome='';
-  if(selected==='avoidance')strategyOutcome=pts<=5?'You kept penalty exposure low.':pts<=15?'You limited the damage, though several point-bearing tricks reached you.':'The avoidance plan broke down because too many penalty points reached your pile.';
-  if(selected==='targeting'){const leader=state.players.reduce((b,p,i)=>p.score<state.players[b].score?i:b,0);strategyOutcome=`The current leader, ${state.players[leader].name}, finished the hand with ${state.players[leader].roundPoints} round points.`;}
-  if(selected==='cancellation'){const used=state.actionLog.filter(a=>a.player===0&&a.before.trick.some(x=>x.card.suit===a.card.suit&&x.card.rank===a.card.rank)).length;strategyOutcome=`You made ${used} direct cancellation play${used===1?'':'s'} during the hand.`;}
-  if(selected==='soloMoon')strategyOutcome=pts===52?'You completed the solo moon.':`You captured ${pts} of 52 penalty points, so the solo moon was not completed.`;
-  if(selected==='twoMoon'){const scorers=state.players.filter(p=>p.roundPoints>0).length;strategyOutcome=scorers===2?'Penalty cards remained concentrated with two players.':`${scorers} players captured penalty cards, so the two-player moon condition was not preserved.`;}
-  const grade=adherence>=.8?'A':adherence>=.65?'B':adherence>=.45?'C':'D';
+function strategyExecutionSummary(strategy,decisions){
+  const matches=decisions.filter(d=>d.matched).length;
+  const adherence=decisions.length?matches/decisions.length:0;
   const misses=decisions.filter(d=>!d.matched).slice(-3);
-  return {grade,adherence,pts,strategyOutcome,roundMessage,misses,decisions:decisions.length};
+  let focus='';
+  if(strategy==='soloMoon') focus='control of every penalty-bearing trick, preservation of entries, and avoidance of any outside scorer';
+  if(strategy==='twoMoon') focus='keeping penalty cards within exactly two collectors and protecting the prospective partner from destructive cancellations';
+  if(strategy==='avoidance') focus='shedding future winners, preserving exits, and refusing unnecessary point-bearing tricks';
+  if(strategy==='targeting') focus='placing points on the intended opponent without taking control at the wrong time';
+  if(strategy==='cancellation') focus='using duplicate information to shape the winner rather than creating cancellation for its own sake';
+  return {strategy,adherence,decisions:decisions.length,misses,focus};
 }
-function renderPostGameAnalysis(){const box=$('postGameAnalysis');if(!box)return;const a=state.lastPostAnalysis;if(!a){box.innerHTML='<p>Analysis will appear when the current hand ends.</p>';return;}box.innerHTML=`<div class="post-card"><div class="post-grade">Grade ${a.grade}</div><p><strong>Selected strategy:</strong> ${STRATEGY_LABELS[state.coachStrategy]}</p><p>${a.strategyOutcome}</p><p>You followed the coach’s top-ranked card on ${Math.round(a.adherence*100)}% of ${a.decisions} recorded decisions. This measures tactical alignment, not moral worth, thankfully.</p></div><div class="post-card"><h4>Key tactical review</h4>${a.misses.length?a.misses.map(m=>`<p class="evidence">• Trick ${m.trick}: played ${m.played}; coach preferred ${m.recommended}. ${m.reason}</p>`).join(''):'<p class="evidence">No major deviations from the coach’s recommendations were recorded.</p>'}</div>`;}
+function buildPostGameAnalysis(roundMessage){
+  const pivots=state.strategyPivots;
+  const original=state.originalStrategy||state.coachStrategy;
+  const firstPivot=pivots[0]||null;
+  const originalEnd=firstPivot?firstPivot.decisionIndex:state.humanDecisionLog.length;
+  const originalDecisions=state.humanDecisionLog.slice(0,originalEnd);
+  const originalAssessment=strategyExecutionSummary(original,originalDecisions);
+  let pivotAssessment=null;
+  if(firstPivot){
+    const finalStrategy=state.coachStrategy;
+    const lastPivot=pivots[pivots.length-1];
+    const pivotDecisions=state.humanDecisionLog.slice(firstPivot.decisionIndex);
+    pivotAssessment={...strategyExecutionSummary(finalStrategy,pivotDecisions),from:firstPivot.from,to:finalStrategy,trigger:firstPivot.reason,trick:firstPivot.trick,pivotCount:pivots.length,lastReason:lastPivot.reason};
+  }
+  const viability=strategyViability(original);
+  return {roundMessage,originalAssessment,pivotAssessment,pivotWasNeeded:!viability.viable||!!firstPivot,pivots};
+}
+function renderAssessmentBlock(title,a,extra=''){
+  const pct=Math.round(a.adherence*100);
+  return `<div class="post-card"><h4>${title}</h4>${extra}<p><strong>Strategic focus:</strong> ${a.focus}.</p><p><strong>Tactical alignment:</strong> ${a.decisions?pct+'% across '+a.decisions+' recorded decisions':'No recorded player decisions in this phase'}.</p>${a.misses.length?a.misses.map(m=>`<p class="evidence">• Trick ${m.trick}: played ${m.played}; coach preferred ${m.recommended}. ${m.reason}</p>`).join(''):'<p class="evidence">No major tactical deviations were recorded for this phase.</p>'}</div>`;
+}
+function renderPostGameAnalysis(){
+  const box=$('postGameAnalysis');if(!box)return;const a=state.lastPostAnalysis;
+  if(!a){box.innerHTML='<p>Analysis will appear when the current hand ends.</p>';return;}
+  const originalExtra=`<p><strong>Original strategy:</strong> ${STRATEGY_LABELS[a.originalAssessment.strategy]}</p>`;
+  let html=renderAssessmentBlock('Part 1: Execution of the original strategy',a.originalAssessment,originalExtra);
+  if(a.pivotAssessment){
+    const p=a.pivotAssessment;
+    const pivotExtra=`<p><strong>Pivot:</strong> ${STRATEGY_LABELS[p.from]} → ${STRATEGY_LABELS[p.to]} on trick ${p.trick}</p><p><strong>Why the pivot was needed:</strong> ${p.trigger}</p>`;
+    html+=renderAssessmentBlock('Part 2: Execution after the pivot',p,pivotExtra);
+  } else {
+    html+=`<div class="post-card"><h4>Part 2: Pivot assessment</h4><p>${a.pivotWasNeeded?'The original strategy ceased to be viable, but no strategy pivot was recorded. The tactical error was not merely the result; it was continuing to make decisions for a plan whose success condition had already disappeared.':'No pivot was needed. The original strategy remained structurally available through the end of the hand.'}</p></div>`;
+  }
+  box.innerHTML=html;
+}

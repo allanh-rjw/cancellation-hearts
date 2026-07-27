@@ -110,3 +110,10 @@ body.locked #app{display:none}
 .password-mark{font-size:3rem;color:var(--danger);line-height:1}
 .password-input-row{display:grid;grid-template-columns:1fr auto;gap:8px}.password-input-row input{min-width:0;padding:12px 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:#fff;color:#13211d;font:inherit}
 .password-submit{width:100%;margin-top:14px;padding:12px}.password-error{min-height:1.4em;margin:10px 0 0!important;color:#ff9b9b!important;font-weight:700}
+
+
+/* Live strategy-pivot coaching */
+.pivot-alert{margin:0 0 14px;padding:14px;border:1px solid rgba(255,190,80,.7);border-radius:12px;background:rgba(109,67,8,.28)}
+.pivot-alert h4{margin:0 0 6px;color:#ffd38a}.pivot-alert p{line-height:1.4}
+.pivot-alert label{display:block;margin:10px 0 5px;font-weight:700}.pivot-alert select{width:100%;margin-bottom:6px}
+.pivot-alert button{margin-top:8px}
