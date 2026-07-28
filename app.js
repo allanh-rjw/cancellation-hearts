@@ -963,7 +963,7 @@ function renderScoreDialog(){
   const box=$('scoreDialogBody'); if(!box||!state.players.length)return;
   const sorted=[...state.players].sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
   const heads=state.scoreHistory.map((_,i)=>`<th>Hand ${i+1}</th>`).join('');
-  box.innerHTML=`<div class="score-table-wrap"><table class="score-table"><thead><tr><th>Player</th>${heads}<th>Total</th></tr></thead><tbody>${sorted.map(p=>`<tr><td><strong>${p.name}</strong></td>${state.scoreHistory.map(h=>`<td>${h[p.name]??0}</td>`).join('')}<td><strong>${p.score}</strong></td></tr>`).join('')}</tbody></table></div>`;
+  box.innerHTML=`<div class="score-table-wrap"><table class="score-table"><thead><tr><th>Player</th><th>Total</th>${heads}</tr></thead><tbody>${sorted.map(p=>`<tr><td><strong>${p.name}</strong></td><td><strong>${p.score}</strong></td>${state.scoreHistory.map(h=>`<td>${h[p.name]??0}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 
 function updatePracticeCoachTabs(){
