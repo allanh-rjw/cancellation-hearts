@@ -280,24 +280,43 @@ function confirmHumanPass(){
 
 function choosePassCards(player){
   const suitCounts=Object.fromEntries(SUITS.map(s=>[s,player.hand.filter(c=>c.suit===s).length]));
-  return [...player.hand].filter(c=>!(c.suit==='C'&&c.rank==='2')).sort((a,b)=>passScore(b,player.persona,suitCounts)-passScore(a,player.persona,suitCounts)).slice(0,3);
+  const prof=difficultyProfile();
+  const candidates=[...player.hand].filter(c=>!(c.suit==='C'&&c.rank==='2'));
+  if(prof.lookahead<2) return candidates.sort((a,b)=>passScore(b,player.persona,suitCounts,player)-passScore(a,player.persona,suitCounts,player)).slice(0,3);
+  // Hard/Expert evaluate complete three-card packages so the pass creates a coherent hand.
+  let best=null;
+  for(let a=0;a<candidates.length-2;a++)for(let b=a+1;b<candidates.length-1;b++)for(let d=b+1;d<candidates.length;d++){
+    const set=[candidates[a],candidates[b],candidates[d]];
+    const remain=player.hand.filter(x=>!set.some(y=>y.id===x.id));
+    const counts=Object.fromEntries(SUITS.map(s=>[s,remain.filter(c=>c.suit===s).length]));
+    const voids=SUITS.filter(s=>counts[s]===0).length;
+    const exits=remain.filter(c=>RANK_VALUE[c.rank]<=6&&c.suit!=='H').length;
+    const exposedSpades=remain.filter(c=>c.suit==='S'&&['Q','K','A'].includes(c.rank)).length;
+    const lowSpades=remain.filter(c=>c.suit==='S'&&RANK_VALUE[c.rank]<=10).length;
+    let score=set.reduce((sum,c)=>sum+passScore(c,player.persona,suitCounts,player),0)+voids*15+Math.min(exits,3)*3;
+    if(exposedSpades&&lowSpades<2) score+=18*exposedSpades;
+    if(counts.S===0) score-=8; // incoming pass can rebuild spades dangerously
+    if(player.persona==='The Moonshot') score-=remain.filter(c=>RANK_VALUE[c.rank]>=11).length*2;
+    if(!best||score>best.score) best={set,score};
+  }
+  return best?.set||candidates.slice(0,3);
 }
-function passScore(c,p,suitCounts){
+function passScore(c,p,suitCounts,player){
   let s=RANK_VALUE[c.rank];
   const moonPotential = suitCounts.H>=5 && ['A','K','Q','J','10'].includes(c.rank);
   if(c.suit==='S'&&c.rank==='Q') s+=35;
+  if(c.suit==='S'&&['A','K'].includes(c.rank)&&suitCounts.S<=3) s+=18;
   if(c.suit==='H') s+=18;
-  // Personas shift thresholds; they do not dictate a strategy regardless of the hand.
   if(p==='The Moonshot' && moonPotential) s-=12;
   if(p==='The Minimalist'){
     if(['A','K'].includes(c.rank)) s+=12;
-    if(moonPotential) s+=6; // only an exceptional hand will overcome this conservative bias
+    if(moonPotential) s+=6;
   }
   if(p==='The Hunter' && RANK_VALUE[c.rank]>=12 && c.suit!=='H') s-=3;
-  if(p==='The Canceller' && RANK_VALUE[c.rank]>=10) s-=2;
+  if(p==='The Canceller' && player&&player.hand.filter(x=>x.suit===c.suit&&x.rank===c.rank).length===2) s+=7;
   if(p==='The Suit Engineer') s += suitCounts[c.suit]<=3 ? 16-suitCounts[c.suit]*3 : 0;
   if(p==='The Enforcer' && c.suit==='H' && RANK_VALUE[c.rank]<7) s-=8;
-  return s+Math.random()*3;
+  return s+Math.random()*difficultyProfile().noise;
 }
 
 function startFirstTrick(){
@@ -433,15 +452,118 @@ function finishRound(){
   } else { setStatus(msg); state.round++; state.dealer=(state.dealer+1)%8; $('nextRoundBtn').classList.remove('hidden'); }
 }
 
+function difficultyProfile(){
+  return {
+    easy:{memory:2,lookahead:0,noise:10,blunder:.30,moonThreshold:16,defense:.72},
+    medium:{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:9,defense:1.15},
+    hard:{memory:13,lookahead:3,noise:1.1,blunder:.025,moonThreshold:4,defense:1.65},
+    expert:{memory:13,lookahead:5,noise:.18,blunder:0,moonThreshold:2,defense:2.15}
+  }[state.difficulty]||{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:9,defense:1.15};
+}
+function playedCards(){ return state.actionLog.map(x=>x.card); }
+function copiesSeen(card){ return playedCards().filter(c=>c.suit===card.suit&&c.rank===card.rank).length; }
+function duplicateLiveFor(card,i){
+  const own=state.players[i].hand.filter(c=>c.suit===card.suit&&c.rank===card.rank).length;
+  return copiesSeen(card)+own<2;
+}
+function inferredVoids(playerIndex){
+  const out=new Set();
+  for(const a of state.actionLog){
+    if(a.player!==playerIndex||!a.before?.trick?.length) continue;
+    const led=a.before.trick[0].card.suit;
+    if(a.card.suit!==led) out.add(led);
+  }
+  return out;
+}
+function remainingSuitEstimate(playerIndex,suit){
+  const knownPlayed=playedCards().filter(c=>c.suit===suit).length;
+  const own=state.players[playerIndex].hand.filter(c=>c.suit===suit).length;
+  return Math.max(0,26-knownPlayed-own);
+}
+function futureHandScore(i,c){
+  const prof=difficultyProfile(); if(!prof.lookahead) return 0;
+  const hand=state.players[i].hand.filter(x=>x.id!==c.id);
+  const suitCards=hand.filter(x=>x.suit===c.suit);
+  const lows=suitCards.filter(x=>RANK_VALUE[x.rank]<=7).length;
+  const highs=suitCards.filter(x=>RANK_VALUE[x.rank]>=10).length;
+  const exits=hand.filter(x=>RANK_VALUE[x.rank]<=6 && x.suit!=='H').length;
+  const voidCreated=suitCards.length===0;
+  const seenHigher=playedCards().filter(x=>x.suit===c.suit&&RANK_VALUE[x.rank]>RANK_VALUE[c.rank]).length;
+  const totalHigher=(14-RANK_VALUE[c.rank])*2;
+  const likelyFutureWinner=Math.max(0,totalHigher-seenHigher)<=2;
+  let s=0;
+  // Shed the highest card that is still likely to lose, preserving lower exits.
+  if(!wouldCurrentlyWin(c)) s+=(RANK_VALUE[c.rank]-2)*1.15*prof.lookahead;
+  if(!wouldCurrentlyWin(c)&&RANK_VALUE[c.rank]<=5) s-=4.2*prof.lookahead;
+  if(voidCreated&&c.suit!=='S') s+=7*prof.lookahead;
+  if(voidCreated&&c.suit==='S'){
+    const incomingRisk=state.phase==='passing'?8:0;
+    const dangerous=hand.some(x=>x.suit==='S'&&['Q','K','A'].includes(x.rank));
+    s+=dangerous?-9:4-incomingRisk;
+  }
+  if(highs>0&&lows===0) s-=6*prof.lookahead; // leaves a suit of forced winners
+  if(likelyFutureWinner&&RANK_VALUE[c.rank]>=9) s+=5*prof.lookahead; // unload before it matures
+  if(exits<=1&&RANK_VALUE[c.rank]<=6&&!wouldCurrentlyWin(c)) s-=6*prof.lookahead;
+  if(duplicateLiveFor(c,i)&&RANK_VALUE[c.rank]>=10) s-=1.5*prof.lookahead; // less reliable control
+  if(!duplicateLiveFor(c,i)&&RANK_VALUE[c.rank]>=10&&!wouldCurrentlyWin(c)) s+=3*prof.lookahead;
+  return s;
+}
+function scoreAwareAdjustment(i,c){
+  const prof=difficultyProfile(); if(prof.lookahead<1) return 0;
+  const projected=currentWinningPlayerIfPlayed(c,i);
+  const pts=state.carryoverPoints+state.trick.reduce((a,x)=>a+cardPoints(x.card),0)+cardPoints(c);
+  const lowest=Math.min(...state.players.map(p=>p.score));
+  const leaders=state.players.map((p,idx)=>({idx,score:p.score})).filter(x=>x.score===lowest).map(x=>x.idx);
+  let s=0;
+  if(pts>0&&leaders.includes(projected)&&projected!==i) s+=8+pts*1.7;
+  if(pts>0&&projected===i) s-=pts*2.2;
+  const projectedTotal=state.players[projected]?.score+(state.players[projected]?.roundPoints||0)+pts;
+  if(projected!==i&&projectedTotal>=state.target){
+    const myTotal=state.players[i].score+state.players[i].roundPoints;
+    const minOther=Math.min(...state.players.filter((_,idx)=>idx!==projected).map(p=>p.score+p.roundPoints));
+    s+=myTotal<=minOther?18:-12;
+  }
+  return s*min(1.5,prof.lookahead/3);
+}
+function min(a,b){return Math.min(a,b);}
 function chooseAiCard(i){
-  const legal=legalCards(i), p=state.players[i];
-  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
-  // Practice defenders still make mistakes on lower levels, but they do not play randomly once a clear shoot threat exists.
+  const legal=legalCards(i), p=state.players[i], prof=difficultyProfile();
+  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
   const threat=practiceThreatState();
   if(state.difficulty==='easy' && !threat.credible) return legal[Math.floor(Math.random()*legal.length)];
-  if(state.difficulty==='easy' && Math.random()<.30) return ranked[Math.min(1,ranked.length-1)].c;
-  if(state.difficulty==='medium'&&Math.random()<.12) return ranked[Math.min(1,ranked.length-1)].c;
+  if(prof.blunder&&Math.random()<prof.blunder) return ranked[Math.min(1,ranked.length-1)].c;
+  // Only randomize among genuinely close plays; Expert is almost deterministic.
+  if(ranked.length>1 && ranked[0].s-ranked[1].s<prof.noise && Math.random()<.22) return ranked[1].c;
   return ranked[0].c;
+}
+function advancedInferenceAdjustment(i,c){
+  const prof=difficultyProfile(); if(prof.lookahead<2) return 0;
+  let s=0;
+  const projected=currentWinningPlayerIfPlayed(c,i);
+  const led=state.trick[0]?.card.suit;
+  const projectedVoids=inferredVoids(projected);
+  if(led&&projectedVoids.has(led)) s-=2; // suspicious projection, cancellation volatility
+  if(state.trick.length===0){
+    // Lead suits that pressure players known void only when that helps the scoreboard or moon defense.
+    const voidPlayers=state.players.map((_,idx)=>idx).filter(idx=>idx!==i&&inferredVoids(idx).has(c.suit));
+    const threat=practiceThreatState();
+    if(voidPlayers.length){
+      if(threat.credible&&voidPlayers.some(idx=>!threat.shooters.has(idx))) s+=8*prof.lookahead;
+      else s-=2.5*voidPlayers.length;
+    }
+    if(remainingSuitEstimate(i,c.suit)>12&&state.players[i].hand.filter(x=>x.suit===c.suit).length>=4) s+=3*prof.lookahead;
+  }
+  // Exact endgame: value cards whose duplicate and all higher cards are accounted for.
+  if(state.trickNumber>=9){
+    const higherUnseen=[];
+    for(const r of RANKS.filter(r=>RANK_VALUE[r]>RANK_VALUE[c.rank])){
+      const seen=playedCards().filter(x=>x.suit===c.suit&&x.rank===r).length;
+      const own=state.players[i].hand.filter(x=>x.suit===c.suit&&x.rank===r).length;
+      if(seen+own<2) higherUnseen.push(r);
+    }
+    if(!higherUnseen.length) s+=wouldCurrentlyWin(c)?5:-3;
+  }
+  return s;
 }
 
 function practiceShooters(){
@@ -454,7 +576,7 @@ function practiceThreatState(){
   const points=state.players.reduce((sum,p,i)=>sum+(shooters.has(i)?p.roundPoints:0),0);
   const outsiderPoints=state.players.reduce((sum,p,i)=>sum+(!shooters.has(i)?p.roundPoints:0),0);
   const queenCaptured=[...shooters].some(i=>state.players[i]?.tricks?.some(c=>c.suit==='S'&&c.rank==='Q'));
-  const threshold=state.difficulty==='hard'?4:state.difficulty==='medium'?9:16;
+  const threshold=difficultyProfile().moonThreshold;
   return {credible:outsiderPoints===0&&(points>=threshold||queenCaptured),points,outsiderPoints,shooters};
 }
 function practiceDefenseAdjustment(i,c){
@@ -466,7 +588,7 @@ function practiceDefenseAdjustment(i,c){
   const existingPts=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
   const loadedPts=existingPts+cardPoints(c);
   const duplicate=state.trick.some(x=>x.card.suit===c.suit&&x.card.rank===c.rank);
-  const aggression=state.difficulty==='hard'?1.65:state.difficulty==='medium'?1.15:.72;
+  const aggression=difficultyProfile().defense;
 
   // In two-player practice, Partner actively helps keep all penalty cards inside the pair.
   if(isShooter){
@@ -549,7 +671,7 @@ function evaluateCard(i,c,persona){
     if(duplicateAlready&&projectedWinner!==i) s+=7;
     if(credibleMoon) s+=wins?8:-3;
   }
-  return s+Math.random()*2;
+  return s+Math.random()*difficultyProfile().noise;
 }
 function wouldCurrentlyWin(card){
   if(state.trick.length===0) return true;
