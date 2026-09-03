@@ -1,4 +1,15 @@
 (async function loadCausalPlanner(){
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src=src; s.onload=resolve; s.onerror=()=>reject(new Error(`Unable to load ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+  function loadStyle(href){
+    if(document.querySelector(`link[href="${href}"]`)) return;
+    const l=document.createElement('link');l.rel='stylesheet';l.href=href;document.head.appendChild(l);
+  }
   try{
     const parts=[];
     for(const name of ['patch.part01','patch.part02','patch.part03']){
@@ -18,5 +29,16 @@
   }catch(error){
     console.error('Causal planner failed to load:',error);
     window.__causalPlannerLoaded=false;
+  }
+
+  try{
+    loadStyle('tutor.css');
+    await loadScript('adaptive-coach.js');
+    await loadScript('hearts-tutor-adapter.js');
+    await loadScript('hearts-tutor.js');
+    window.__adaptiveTutorLoaded=true;
+  }catch(error){
+    console.error('Adaptive tutor failed to load:',error);
+    window.__adaptiveTutorLoaded=false;
   }
 })();
