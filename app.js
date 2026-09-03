@@ -60,8 +60,20 @@ const state = {
   players: [], dealer: 0, round: 1, target: 100, difficulty: 'medium',
   currentPlayer: 0, leader: 0, trick: [], trickNumber: 0, heartsBroken: false,
   phase: 'idle', selected: new Set(), passOffset: 1, gameOver: false, coachStrategy: null,
-  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null
+  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
 };
+
+
+function loadLearningProfile(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('cancellationHeartsLearning')||'null');
+    return saved&&saved.version===1?saved:{version:1,games:0,hands:0,persona:{},defenseBoost:0,targetingBoost:0,passingBoost:0};
+  }catch(e){return {version:1,games:0,hands:0,persona:{},defenseBoost:0,targetingBoost:0,passingBoost:0};}
+}
+function saveLearningProfile(){
+  try{localStorage.setItem('cancellationHeartsLearning',JSON.stringify(state.learningProfile));}catch(e){}
+}
+state.learningProfile=loadLearningProfile();
 
 const $ = id => document.getElementById(id);
 
@@ -94,7 +106,7 @@ $('strategySelect').onchange = ()=>{
     state.coachStrategy=next;
     if(!state.originalStrategy || state.phase==='passing') state.originalStrategy=next;
   }
-  renderStrategyOverview(); renderRejectedStrategies(); renderPassingRecommendations(); renderTrickCoach(); renderCardRecommendation();
+  renderStrategyOverview(); renderRejectedStrategies(); renderHandPathway(); renderPassingRecommendations(); renderGameStateAnalysis(); renderTrickCoach(); renderCardRecommendation();
 };
 document.querySelectorAll('.coach-tab').forEach(b=>b.onclick=()=>activateCoachTab(b.dataset.tab));
 ['boardWeight','scoreWeight','strategyWeight'].forEach(id=>$(id).oninput=updateCoachWeights);
@@ -154,6 +166,8 @@ function startGame(){
   state.gameOver = false;
   state.practiceEnded = false;
   state.scoreHistory = [];
+  state.handAnalysisHistory = [];
+  state.opponentHistory = {};
   $('setup').classList.add('hidden');
   $('game').classList.remove('hidden');
   $('startOverBtn').classList.remove('hidden');
@@ -164,13 +178,12 @@ function startGame(){
 
 function beginRound(){
   state.practiceEnded=false;
-  state.phase = 'dealing'; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.originalStrategy=null; state.strategyPivots=[]; state.pendingPivot=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null;
+  state.phase = 'dealing'; state.currentHandPathway=null; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.originalStrategy=null; state.strategyPivots=[]; state.pendingPivot=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null; state.openingAutoPlayers=new Set(); state.openingLeadSuit=null;
   state.players.forEach(p=>{p.hand=[]; p.roundPoints=0; p.tricks=[];});
   if(state.mode==='practice') dealPracticeRound();
   else {
     const deck = shuffle(makeDeck());
     for(let i=0;i<104;i++) state.players[i%8].hand.push(deck[i]);
-    ensureTwoClubsSeparated();
   }
   state.players.forEach(p=>sortHand(p.hand));
   state.roundStartMetrics=humanHandMetrics();
@@ -251,7 +264,6 @@ function dealPracticeRound(){
     if(state.players[cursor].hand.length<13)state.players[cursor].hand.push(deck.pop());
     cursor=cursor%7+1;
   }
-  ensureTwoClubsSeparated();
 }
 
 function makeDeck(){
@@ -265,7 +277,6 @@ function passDescription(o){ if(o===4) return 'across'; return `${Math.abs(o)} s
 
 function confirmHumanPass(){
   if(state.selected.size!==3) return;
-  if([...state.selected].some(id=>{const c=state.players[0].hand.find(x=>x.id===id); return c&&c.suit==='C'&&c.rank==='2';})) return;
   const passes = [];
   for(let i=0;i<8;i++) passes.push(i===0?[...state.selected].map(id=>state.players[0].hand.find(c=>c.id===id)):choosePassCards(state.players[i]));
   for(let i=0;i<8;i++) for(const c of passes[i]) state.players[i].hand.splice(state.players[i].hand.findIndex(x=>x.id===c.id),1);
@@ -281,7 +292,7 @@ function confirmHumanPass(){
 function choosePassCards(player){
   const suitCounts=Object.fromEntries(SUITS.map(s=>[s,player.hand.filter(c=>c.suit===s).length]));
   const prof=difficultyProfile();
-  const candidates=[...player.hand].filter(c=>!(c.suit==='C'&&c.rank==='2'));
+  const candidates=[...player.hand];
   if(prof.lookahead<2) return candidates.sort((a,b)=>passScore(b,player.persona,suitCounts,player)-passScore(a,player.persona,suitCounts,player)).slice(0,3);
   // Hard/Expert evaluate complete three-card packages so the pass creates a coherent hand.
   let best=null;
@@ -322,34 +333,51 @@ function passScore(c,p,suitCounts,player){
 function startFirstTrick(){
   state.phase='playing';
   state.trickNumber=0;
-  // The opening leader is the first 2♣ holder clockwise to the left of the dealer.
-  let openingLeader=null;
-  for(let step=1;step<=8;step++){
-    const i=(state.dealer+step)%8;
-    if(state.players[i].hand.some(c=>c.suit==='C'&&c.rank==='2')){ openingLeader=i; break; }
-  }
-  state.leader=openingLeader??((state.dealer+1)%8);
+  state.leader=(state.dealer+1)%8;
   state.currentPlayer=state.leader;
-  startTrick();
+  state.trick=[];
+  state.openingAutoPlayers=new Set();
+  state.openingLeadSuit=null;
+  // Both 2♣ cards are placed face-up before normal play begins. Their holders
+  // have already contributed a card to the opening trick and skip their turn.
+  state.players.forEach((p,i)=>{
+    const twos=p.hand.filter(c=>c.suit==='C'&&c.rank==='2');
+    for(const card of twos){
+      p.hand.splice(p.hand.findIndex(x=>x.id===card.id),1);
+      state.trick.push({player:i,card,cancelled:false,prelaid:true});
+      state.openingAutoPlayers.add(i);
+    }
+  });
+  updateCancellation();
+  while(state.openingAutoPlayers.has(state.currentPlayer)) state.currentPlayer=(state.currentPlayer+1)%8;
+  renderAll();
+  setStatus(`Both 2♣ cards are down. ${state.players[state.leader].name}, immediately left of the dealer, starts the opening trick.`);
+  continueTurn();
 }
-function startTrick(){ state.trick=[]; state.currentTrickAward=null; state.phase='playing'; state.currentPlayer=state.leader; renderAll(); continueTurn(); }
+function startTrick(){ state.trick=[]; state.currentTrickAward=null; state.phase='playing'; state.currentPlayer=state.leader; state.openingLeadSuit=null; renderAll(); continueTurn(); }
 function continueTurn(){
+  if(state.trickNumber===0){
+    while(state.openingAutoPlayers.has(state.currentPlayer) && state.trick.length<8) state.currentPlayer=(state.currentPlayer+1)%8;
+  }
   renderAll();
   if(state.currentPlayer===0){ setStatus('Your turn. Choose a legal card.'); renderHand(); renderTrickCoach(); return; }
   setStatus(`${state.players[state.currentPlayer].name} is thinking…`);
   setTimeout(()=>playCard(state.currentPlayer,chooseAiCard(state.currentPlayer)),Math.round(6000/state.playSpeed));
 }
+function currentLedSuit(){
+  if(state.trickNumber===0) return state.openingLeadSuit;
+  return state.trick[0]?.card.suit||null;
+}
 
 function legalCards(playerIndex){
   const hand=state.players[playerIndex].hand;
-  if(state.trickNumber===0){ const twoClubs=hand.filter(c=>c.suit==='C'&&c.rank==='2'); if(twoClubs.length) return twoClubs; }
-  if(state.trick.length===0){
+  if(!currentLedSuit()){
     let legal=hand;
     if(!state.heartsBroken){ const nonHearts=hand.filter(c=>c.suit!=='H'); if(nonHearts.length) legal=nonHearts; }
     if(state.trickNumber===0) legal=legal.filter(c=>c.suit!=='H' && !(c.suit==='S'&&c.rank==='Q'));
     return legal.length?legal:hand;
   }
-  const led=state.trick[0].card.suit;
+  const led=currentLedSuit();
   const follow=hand.filter(c=>c.suit===led);
   let legal=follow.length?follow:hand;
   if(state.trickNumber===0){ const safe=legal.filter(c=>c.suit!=='H' && !(c.suit==='S'&&c.rank==='Q')); if(safe.length) legal=safe; }
@@ -360,12 +388,15 @@ function playCard(playerIndex,card){
   const legalNow=legalCards(playerIndex);
   if(!legalNow.some(c=>c.id===card.id)) return;
   const before={trick:state.trick.map(x=>({player:x.player,card:{...x.card},cancelled:x.cancelled})), roundPoints:state.players.map(p=>p.roundPoints), scores:state.players.map(p=>p.score)};
-  if(playerIndex===0){ const rec=rankHumanLegalCards(legalNow)[0]; state.humanDecisionLog.push({trick:state.trickNumber+1,played:cardLabel(card),recommended:rec?cardLabel(rec.card):null,matched:!!rec&&rec.card.id===card.id,strategy:state.coachStrategy,reason:rec?.reason||''}); }
-  state.actionLog.push({player:playerIndex,card:{...card},trick:state.trickNumber+1,position:state.trick.length,before});
+  if(playerIndex===0){ const rec=rankHumanLegalCards(legalNow)[0]; const plan=buildHandPathway(); state.humanDecisionLog.push({trick:state.trickNumber+1,played:cardLabel(card),recommended:rec?cardLabel(rec.card):null,matched:!!rec&&rec.card.id===card.id,strategy:state.coachStrategy,reason:rec?.reason||'',pathwayPhase:plan.phase,immediateObjective:plan.immediate}); }
+  const action={player:playerIndex,card:{...card},trick:state.trickNumber+1,position:state.trick.length,before,round:state.round};
+  state.actionLog.push(action);
+  if(playerIndex>0){ const name=state.players[playerIndex].name; (state.opponentHistory[name]??=[]).push({...action,playerName:name}); }
   playCardSound();
   const p=state.players[playerIndex];
   p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
-  if(card.suit==='H' && state.trick.length>0) state.heartsBroken=true;
+  if(state.trickNumber===0 && !state.openingLeadSuit) state.openingLeadSuit=card.suit;
+  if(card.suit==='H' && currentLedSuit()) state.heartsBroken=true;
   state.trick.push({player:playerIndex,card,cancelled:false});
   updateCancellation();
   state.currentPlayer=(state.currentPlayer+1)%8;
@@ -378,7 +409,7 @@ function updateCancellation(){
   Object.values(groups).forEach(g=>{if(g.length===2)g.forEach(x=>x.cancelled=true);});
 }
 function finishTrick(){
-  const led=state.trick[0].card.suit;
+  const led=currentLedSuit();
   const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
   const trickPoints=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
 
@@ -426,7 +457,7 @@ function endBrokenPractice(winner,points){
   const detail=points===1?'1 penalty point':`${points} penalty points`;
   setStatus(`${breaker} captured ${detail}. The ${target} has been broken, so this practice hand is over.`);
   state.lastPostAnalysis=buildPostGameAnalysis(`Practice ended when ${breaker} broke the ${target}.`);
-  renderPostGameAnalysis(); renderOpponentAnalysis(); renderAll();
+  renderPostHandAnalysis(); renderPostGameAnalysis(); renderOpponentAnalysis(); renderAll();
 }
 function cardPoints(c){ return c.suit==='H'?1:(c.suit==='S'&&c.rank==='Q'?13:0); }
 
@@ -442,7 +473,16 @@ function finishRound(){
   } else { state.players.forEach(p=>p.score+=p.roundPoints); msg='Round complete. Points added normally.'; }
   const handScores=state.players.map(p=>p.score-(state.scoreHistory.reduce((sum,h)=>sum+(h[p.name]||0),0)));
   const handRecord={}; state.players.forEach((p,i)=>handRecord[p.name]=handScores[i]); state.scoreHistory.push(handRecord);
-  state.lastPostAnalysis=buildPostGameAnalysis(msg); renderPostGameAnalysis(); renderOpponentAnalysis(); renderScoreDialog();
+  if(state.mode==='standard'){
+    const lp=state.learningProfile||loadLearningProfile(); lp.hands=(lp.hands||0)+1;
+    const collectors=state.players.filter(p=>p.roundPoints>0).length;
+    if(collectors<=2) lp.defenseBoost=Math.min(3,(lp.defenseBoost||0)+0.08); else lp.defenseBoost=Math.max(0,(lp.defenseBoost||0)-0.01);
+    const human=state.players[0].roundPoints;
+    if(human<8) lp.targetingBoost=Math.min(3,(lp.targetingBoost||0)+0.04);
+    state.players.slice(1).forEach(p=>{const x=lp.persona[p.persona]||{hands:0,points:0};x.hands++;x.points+=p.roundPoints;lp.persona[p.persona]=x;});
+    state.learningProfile=lp; saveLearningProfile();
+  }
+  state.lastPostAnalysis=buildPostGameAnalysis(msg); state.handAnalysisHistory.push({...state.lastPostAnalysis,decisions:state.humanDecisionLog.map(x=>({...x})),pivots:state.strategyPivots.map(x=>({...x}))}); renderPostHandAnalysis(); renderPostGameAnalysis(); renderOpponentAnalysis(); renderScoreDialog();
   if(!$('scoreDialog').open) $('scoreDialog').showModal();
   renderAll();
   if(Math.max(...state.players.map(p=>p.score))>=state.target){
@@ -454,11 +494,11 @@ function finishRound(){
 
 function difficultyProfile(){
   return {
-    easy:{memory:2,lookahead:0,noise:10,blunder:.30,moonThreshold:16,defense:.72},
-    medium:{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:9,defense:1.15},
-    hard:{memory:13,lookahead:3,noise:1.1,blunder:.025,moonThreshold:4,defense:1.65},
-    expert:{memory:13,lookahead:5,noise:.18,blunder:0,moonThreshold:2,defense:2.15}
-  }[state.difficulty]||{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:9,defense:1.15};
+    easy:{memory:2,lookahead:0,noise:10,blunder:.30,moonThreshold:10,defense:.82},
+    medium:{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:5,defense:1.35},
+    hard:{memory:13,lookahead:3,noise:1.1,blunder:.025,moonThreshold:2,defense:1.95},
+    expert:{memory:13,lookahead:5,noise:.18,blunder:0,moonThreshold:1,defense:2.65}
+  }[state.difficulty]||{memory:6,lookahead:1,noise:4,blunder:.12,moonThreshold:5,defense:1.35};
 }
 function playedCards(){ return state.actionLog.map(x=>x.card); }
 function copiesSeen(card){ return playedCards().filter(c=>c.suit===card.suit&&c.rank===card.rank).length; }
@@ -543,7 +583,7 @@ function advancedInferenceAdjustment(i,c){
   const led=state.trick[0]?.card.suit;
   const projectedVoids=inferredVoids(projected);
   if(led&&projectedVoids.has(led)) s-=2; // suspicious projection, cancellation volatility
-  if(state.trick.length===0){
+  if(!currentLedSuit()){
     // Lead suits that pressure players known void only when that helps the scoreboard or moon defense.
     const voidPlayers=state.players.map((_,idx)=>idx).filter(idx=>idx!==i&&inferredVoids(idx).has(c.suit));
     const threat=practiceThreatState();
@@ -620,6 +660,7 @@ function practiceDefenseAdjustment(i,c){
     if(duplicate && projected!==i) s-=5*aggression;
     if(state.trick.length===0 && c.suit==='H') s+=14*aggression;
   }
+  s += (state.learningProfile?.defenseBoost||0)*4;
   return s;
 }
 function evaluateCard(i,c,persona){
@@ -636,17 +677,32 @@ function evaluateCard(i,c,persona){
   const moonReadiness=handHigh+highHearts*1.5+suitControl*1.5;
   const moonThreshold=persona==='The Moonshot'?10:persona==='The Opportunist'?12:persona==='The Minimalist'?16:13;
   const credibleMoon=moonReadiness>=moonThreshold && collectors.length<=1;
-  const moonThreat=collectors.length<=2&&collectors.reduce((a,b)=>a+b.pts,0)>=18;
+  const concentrated=collectors.reduce((a,b)=>a+b.pts,0);
+  const repeatedControl=Math.max(0,...state.players.map((p,idx)=>p.tricks?.length||0));
+  const moonThreat=collectors.length<=2 && (concentrated>=difficultyProfile().moonThreshold || repeatedControl>=2 || state.trickNumber>=2);
 
   // Common rational baseline: avoid winning loaded tricks, dump liability when safely void, and value low cards.
   let s=(wins?-(8+trickPts*3):10)+cardPoints(c)*6+(RANK_VALUE[c.rank]<=6?3:0);
+
+  // All competent opponents abandon ordinary avoidance as soon as one or two
+  // collectors show a credible moon pattern. Hard and Expert react after the
+  // first concentrated penalty trick or repeated control, not after half the deck.
+  if(moonThreat && state.difficulty!=='easy'){
+    const outsideCurrentCollectors=!collectors.some(x=>x.idx===projectedWinner);
+    const loaded=trickPts+cardPoints(c)>0;
+    const urgency=difficultyProfile().defense+(state.learningProfile?.defenseBoost||0);
+    if(loaded && outsideCurrentCollectors) s+=42*urgency;
+    if(loaded && !outsideCurrentCollectors) s-=34*urgency;
+    if(cardPoints(c)>0 && outsideCurrentCollectors) s+=22*urgency;
+    if(projectedWinner===i && loaded && outsideCurrentCollectors) s+=16*urgency;
+  }
 
   if(persona==='The Minimalist'){
     s += wins?-(10+trickPts*2):5;
     if(credibleMoon) s += wins?10:-4; // exceptional hands can still pull it outside its comfort zone
   }
   if(persona==='The Hunter'){
-    if(projectedWinner===leaderIndex) s+=12+trickPts*3;
+    if(projectedWinner===leaderIndex) s+=12+trickPts*3+(state.learningProfile?.targetingBoost||0)*3;
     if(projectedWinner!==leaderIndex&&trickPts>0) s-=5;
   }
   if(persona==='The Moonshot'){
@@ -676,13 +732,15 @@ function evaluateCard(i,c,persona){
 function wouldCurrentlyWin(card){
   if(state.trick.length===0) return true;
   const fake=[...state.trick,{player:-1,card,cancelled:false}]; resolveFakeCancellation(fake);
-  const eligible=fake.filter(x=>x.card.suit===fake[0].card.suit&&!x.cancelled);
+  const led=currentLedSuit()||card.suit;
+  const eligible=fake.filter(x=>x.card.suit===led&&!x.cancelled);
   return eligible.length>0&&eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player===-1;
 }
 function currentWinningPlayerIfPlayed(card,i){
   if(state.trick.length===0) return i;
   const fake=[...state.trick,{player:i,card,cancelled:false}]; resolveFakeCancellation(fake);
-  const eligible=fake.filter(x=>x.card.suit===fake[0].card.suit&&!x.cancelled);
+  const led=currentLedSuit()||card.suit;
+  const eligible=fake.filter(x=>x.card.suit===led&&!x.cancelled);
   return eligible.length?eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player:fake[0].player;
 }
 function resolveFakeCancellation(cards){
@@ -714,7 +772,7 @@ function renderSeats(){
 function currentTrickStatus(){
   if(!state.trick.length) return {winner:null,points:state.carryoverPoints};
   if(state.phase==='trick-end'&&state.currentTrickAward) return state.currentTrickAward;
-  const led=state.trick[0].card.suit;
+  const led=currentLedSuit();
   const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
   if(!eligible.length) return {winner:null,points:state.carryoverPoints+state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0)};
   const winnerItem=eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b);
@@ -753,7 +811,6 @@ function renderHand(){
     const wrap=document.createElement('div'); wrap.innerHTML=cardHtml(c,cls); const node=wrap.firstElementChild;
     node.onclick=()=>{
       if(state.phase==='passing'){
-        if(c.suit==='C'&&c.rank==='2'){ setStatus('The 2♣ cannot be passed; both copies must be played in the opening trick.'); return; }
         if(state.selected.has(c.id)) state.selected.delete(c.id); else if(state.selected.size<3) state.selected.add(c.id);
         $('confirmPassBtn').disabled=state.selected.size!==3; renderHand();
       } else if(state.phase==='playing'&&state.currentPlayer===0&&legalIds.has(c.id)) playCard(0,c);
@@ -849,8 +906,148 @@ function renderCoach(){
   $('coachRecommendation').innerHTML=`<strong>Recommended: ${STRATEGY_LABELS[rec]}</strong><br>${strategySummary(rec)}`;
   $('strategySelect').value=state.coachStrategy;
   $('coachSubtitle').textContent=state.mode==='practice'?`${({ridiculous:'Ridiculously strong',strong:'Strong',solid:'Solid',marginal:'Marginal'})[state.practiceStrength]} ${state.practiceType==='solo'?'solo':'two-player'} moon practice · ${m.hand.length} cards`:`Round ${state.round}, ${state.phase==='passing'?'before the pass is complete':'current hand'} · ${m.hand.length} cards`;
-  renderStrategyOverview(); renderRejectedStrategies(); renderPassingRecommendations(); renderTrickCoach(); renderCardRecommendation(); renderOpponentAnalysis(); renderPostGameAnalysis();
+  renderStrategyOverview(); renderRejectedStrategies(); renderHandPathway(); renderPassingRecommendations(); renderGameStateAnalysis(); renderTrickCoach(); renderCardRecommendation(); renderOpponentAnalysis(); renderPostHandAnalysis(); renderPostGameAnalysis();
 }
+
+function reliableEntryCards(m){
+  return m.hand.filter(c=>RANK_VALUE[c.rank]>=11).map(c=>({c,reliable:!duplicateLiveFor(c,0)})).sort((a,b)=>(Number(b.reliable)-Number(a.reliable))||RANK_VALUE[b.c.rank]-RANK_VALUE[a.c.rank]);
+}
+function likelyFutureWinners(m){
+  return m.hand.filter(c=>{
+    if(RANK_VALUE[c.rank]<8) return false;
+    const higher=RANKS.filter(r=>RANK_VALUE[r]>RANK_VALUE[c.rank]).reduce((n,r)=>n+Math.max(0,2-playedCards().filter(x=>x.suit===c.suit&&x.rank===r).length-m.hand.filter(x=>x.suit===c.suit&&x.rank===r).length),0);
+    return higher<=4;
+  }).sort((a,b)=>RANK_VALUE[b.rank]-RANK_VALUE[a.rank]);
+}
+function scoreTargetIndex(){
+  if(state.players.length<2) return null;
+  let best=1;
+  for(let i=2;i<state.players.length;i++) if(state.players[i].score<state.players[best].score) best=i;
+  return best;
+}
+function resolveLoggedTrickWinner(cards){
+  if(!cards.length)return null;
+  const led=cards[0].card.suit;
+  const counts={};
+  cards.forEach(x=>{const k=x.card.suit+x.card.rank;counts[k]=(counts[k]||0)+1;});
+  const eligible=cards.filter(x=>x.card.suit===led&&counts[x.card.suit+x.card.rank]===1);
+  if(!eligible.length)return null;
+  return eligible.reduce((best,x)=>RANK_VALUE[x.card.rank]>RANK_VALUE[best.card.rank]?x:best).player;
+}
+function currentMoonThreat(){
+  const collectors=state.players.map((p,i)=>({i,pts:p.roundPoints,tricks:p.tricks?.length||0})).filter(x=>x.pts>0).sort((a,b)=>b.pts-a.pts);
+  const total=collectors.reduce((n,x)=>n+x.pts,0);
+  const recentWins={};
+  state.actionLog.forEach(a=>{ if(a.before?.trick?.length===7){ const winner=resolveLoggedTrickWinner([...a.before.trick,{player:a.player,card:a.card}]); if(winner!=null) recentWins[winner]=(recentWins[winner]||0)+1; }});
+  const dominant=Object.entries(recentWins).sort((a,b)=>b[1]-a[1])[0];
+  const concentration=collectors.length<=2&&total>=3;
+  const queenConcentration=collectors.some(x=>x.pts>=13);
+  const controlSignal=dominant&&Number(dominant[1])>=3;
+  return {credible:!!(concentration&&(queenConcentration||total>=6||controlSignal)),collectors,total,dominant:dominant?Number(dominant[0]):null};
+}
+function buildHandPathway(){
+  if(!state.players.length) return {strategy:'avoidance',phase:'Waiting',immediate:'Start the hand',desired:'Preserve flexibility',entry:'None yet',exit:'None yet',preserve:'None',transition:'Deal the cards',abort:'None',steps:[]};
+  const m=humanHandMetrics();
+  const strategy=state.coachStrategy||recommendedStrategy(m);
+  const vc=bestVoidCandidate(m);
+  const entries=reliableEntryCards(m);
+  const entry=entries[0]?.c;
+  const exits=[...m.exits].sort((a,b)=>RANK_VALUE[a.rank]-RANK_VALUE[b.rank]);
+  const exit=exits[0];
+  const future=likelyFutureWinners(m);
+  const target=scoreTargetIndex();
+  const targetName=target!=null?state.players[target].name:'the low-score leader';
+  const targetVoids=target!=null?[...inferredVoids(target)]:[];
+  const humanVoids=SUITS.filter(s=>m.counts[s]===0);
+  const threat=currentMoonThreat();
+  let phase='', immediate='', desired='', transition='', abort='', steps=[];
+  const entryText=entry?cardLabel(entry)+(duplicateLiveFor(entry,0)?' (control is conditional because its twin is still live)':' (matching copy accounted for; reliable control)'):'No reliable high-card entry is currently available';
+  const exitText=exit?cardLabel(exit):'No obvious low exit';
+  if(strategy==='avoidance'){
+    if(m.counts[vc]>0&&m.counts[vc]<=2){phase=`Establish a ${suitName(vc)} void`;immediate=`Remove your remaining ${suitName(vc).toLowerCase()}${m.counts[vc]>1?'s':''} without taking a loaded trick.`;transition=`Advance once you are void in ${suitName(vc)}; then use that void to unload exposed winners or penalty cards.`;}
+    else if(future.length){phase='Shed future winners';immediate=`Use safe losing opportunities to remove ${future.slice(0,3).map(cardLabel).join(', ')} before they mature into forced winners.`;transition=`Advance when the dangerous middle/high cards are gone or a useful void appears.`;}
+    else {phase='Preserve mobility';immediate='Avoid unnecessary control while keeping at least one reliable exit for the late hand.';transition='Shift to endgame calculation once the remaining high cards and voids are mostly known.';}
+    desired=`Reach the late hand with a useful void, few exposed winners, and ${exitText} still available to surrender the lead.`;
+    abort=`If ${threat.credible?state.players[threat.collectors[0]?.i]?.name+' is already a credible moon threat':'a credible moon threat develops'}, temporarily abandon pure avoidance and preserve a stopper or force points to another collector.`;
+    steps=[`Early: play the highest card that can safely lose; do not spend ${exitText} merely because it is the lowest card.`,`Acquire the lead with ${entryText} only when doing so lets you complete the void, flush a dangerous suit, or reposition the hand.`,`Once that objective is accomplished, cede the lead with ${exitText} before opponents can use their voids to dump points onto your winners.`,`Late: recompute effective winners after every cancellation; shed cards that have become top uncancelled ranks.`];
+  } else if(strategy==='targeting'){
+    phase=targetVoids.length?'Build a delivery route to the target':'Map the target before committing control';
+    immediate=targetVoids.length?`${targetName} is known void in ${targetVoids.map(suitName).join(' and ')}. Preserve leads that force ${targetName} to expose or dump cards while you control where the loaded trick lands.`:`Use the next clean tricks to learn which suits ${targetName} is short in; do not spend your strongest control before you know how to convert it into points on the target.`;
+    desired=`Create a position where you can take the lead with ${entryText}, then lead a suit that forces penalty points toward ${targetName}, while retaining ${exitText} to get off lead afterward.`;
+    transition=`Advance once ${targetName}'s vulnerable suit is known and you still hold a reliable entry.`;
+    abort=`If targeting ${targetName} would end the game in favor of someone else, or the target becomes able to dump points harmlessly on your lead, revert to avoidance or choose a new target.`;
+    steps=[`Diagnose: establish ${targetName}'s likely voids and remaining suits.`,`Acquire: use ${entryText} to seize the lead only when a delivery route is ready.`,`Deliver: lead the suit that constrains ${targetName}; do not simply dump a queen at the first legal opportunity.`,`Exit: after the point-placement attempt, use ${exitText} to avoid becoming the next point collector.`];
+  } else if(strategy==='cancellation'){
+    phase=state.trickNumber<4?'Map the live duplicates':'Engineer a controlled cancellation';
+    immediate=`Identify which of your high cards have live twins and which ranks are now reliable because both copies are accounted for.`;
+    desired=`Use cancellation to change the winner in a predictable direction, then retain ${exitText} so you can surrender control after the cancellation accomplishes its purpose.`;
+    transition='Advance when a duplicate chain has a known post-cancellation winner rather than merely a possible cancellation.';
+    abort='Do not create a cancellation when the promoted winner is unknown, outside your intended target, or would capture a loaded carryover pot.';
+    steps=[`Map: track both copies of A/K/Q/J in the suits you can control.`,`Set up: preserve a reliable entry such as ${entryText}; do not confuse an available duplicate with a useful duplicate.`,`Execute: cancel only when you have calculated the next-highest uncancelled winner.`,`Exit: after the cancellation changes control as intended, use ${exitText} or a prepared void to avoid being trapped.`];
+  } else if(strategy==='soloMoon'){
+    const myPts=state.players[0].roundPoints;
+    phase=myPts<8?'Test control without surrendering a penalty trick':myPts<26?'Consolidate continuous control':'Run the remaining penalty cards';
+    immediate=myPts<8?'Probe your strongest non-heart suit and verify that cancellations do not hand the lead to an outsider.':'Keep every penalty-bearing trick in your pile; use non-penalty tricks only to transfer between your own control suits.';
+    desired='Reach a state where both queens are secured or safely controllable, hearts can be run, and every suit has either a reliable winner or a planned route back to the lead.';
+    transition='Commit fully only after the early control tests confirm that no weak suit can force an outside winner.';
+    abort='The instant another player captures any penalty card, solo moon is dead; immediately evaluate a two-player moon pivot if exactly one other collector exists.';
+    steps=[`Test: use ${entryText} to verify control of a non-heart suit before exposing the heart run.`,`Secure queens: never cancel a queen unless the promoted winner is still you; a queen lead is about controlling the post-cancellation winner, not collecting 13 points in the abstract.`,`Run: once queen and suit control are stable, cash hearts while your top sequence remains intact.`,`Recovery: preserve at least one route back to the lead until you are certain the remaining tricks are forced.`];
+  } else {
+    const partner=state.mode==='practice'&&state.partnerIndex!=null?state.players[state.partnerIndex].name:(currentMoonThreat().collectors.find(x=>x.i!==0)?.i!=null?state.players[currentMoonThreat().collectors.find(x=>x.i!==0).i].name:'the prospective partner');
+    phase=state.players[0].roundPoints+(state.partnerIndex!=null?state.players[state.partnerIndex].roundPoints:0)<10?'Verify complementary control':'Keep lead transfers inside the shooting pair';
+    immediate=`Identify the suits you cannot reliably control and verify that ${partner} can win them without cancellation promoting an outsider.`;
+    desired=`Create a two-person control network: you control your strong suits, ${partner} covers your gaps, and every transfer of the lead remains inside the pair.`;
+    transition=`Advance once ${partner} has demonstrated reliable control in at least one suit where your highest card is vulnerable.`;
+    abort='If a third player captures any penalty card, the two-player moon is over; pivot immediately instead of continuing to feed points into a dead plan.';
+    steps=[`Divide roles: use your strongest suits for entries; look for ${partner} to cover the suits where your top card is only a medium or cancellation-sensitive winner.`,`Verify transfers: before leading toward ${partner}, calculate whether a duplicate can cancel their apparent winner and promote an outsider.`,`Protect gaps: keep a control card in any suit neither shooter has yet demonstrated.`,`Close: once the remaining suit winners are all inside the pair, stop spending exits and keep the lead circulating only between the two shooters.`];
+  }
+  const plan={strategy,phase,immediate,desired,entry:entryText,exit:exitText,preserve:exit?`Preserve ${cardLabel(exit)} until its exit function is no longer needed.`:'Preserve the lowest card in a suit with multiple higher uncancelled cards.',transition,abort,steps,voidCandidate:vc,targetName,humanVoids};
+  state.currentHandPathway=plan;
+  return plan;
+}
+function renderHandPathway(){
+  const box=$('handPathway'); if(!box||!state.players.length)return;
+  const p=buildHandPathway();
+  box.innerHTML=`<div class="pathway-summary"><div><span>Strategy</span><strong>${STRATEGY_LABELS[p.strategy]}</strong></div><div><span>Current phase</span><strong>${p.phase}</strong></div></div><div class="pathway-card"><h4>Desired position</h4><p>${p.desired}</p></div><div class="pathway-card"><h4>Immediate objective</h4><p>${p.immediate}</p></div><div class="pathway-card"><h4>Control map</h4><p><strong>Preferred lead acquisition:</strong> ${p.entry}</p><p><strong>Preferred exit:</strong> ${p.exit}</p><p>${p.preserve}</p></div><div class="pathway-card"><h4>Execution sequence</h4><ol>${p.steps.map(x=>`<li>${x}</li>`).join('')}</ol></div><div class="pathway-card"><h4>Phase transition</h4><p>${p.transition}</p><p class="pathway-warning"><strong>Abort / pivot trigger:</strong> ${p.abort}</p></div>`;
+}
+function effectiveHighSummary(suit){
+  const remaining=RANKS.slice().reverse().filter(r=>{
+    const seen=playedCards().filter(c=>c.suit===suit&&c.rank===r).length;
+    return seen<2;
+  });
+  if(!remaining.length)return 'all ranks exhausted';
+  const r=remaining[0],seen=playedCards().filter(c=>c.suit===suit&&c.rank===r).length;
+  return `${r}${SUIT_SYMBOL[suit]} is the highest rank not fully accounted for (${2-seen} cop${2-seen===1?'y':'ies'} still live)`;
+}
+function renderGameStateAnalysis(){
+  const box=$('gameStateAnalysis'); if(!box||!state.players.length)return;
+  const target=scoreTargetIndex();
+  const low=Math.min(...state.players.map(p=>p.score));
+  const lowNames=state.players.filter(p=>p.score===low).map(p=>p.name).join(', ');
+  const voidRows=state.players.slice(1).map((p,j)=>{const v=[...inferredVoids(j+1)];return v.length?`${p.name}: ${v.map(suitName).join(', ')}`:null}).filter(Boolean);
+  const queensPlayed=playedCards().filter(c=>c.suit==='S'&&c.rank==='Q').length;
+  const threat=currentMoonThreat();
+  const threatText=threat.credible?`${threat.collectors.map(x=>state.players[x.i].name+' ('+x.pts+')').join(' and ')} are concentrating the penalty points. Preserve or create a route for another player to capture points.`:'No credible moon threat yet, but preserve a stopper if one or two players begin controlling loaded tricks.';
+  const endingRisk=state.players.filter(p=>p.score+p.roundPoints>=state.target).map(p=>p.name);
+  box.innerHTML=`<div class="game-state-grid"><div class="game-state-card"><h4>Game objective</h4><p>${lowNames} ${lowNames.includes(',')?'are':'is'} currently the low-score threat at ${low}. ${target!=null&&state.players[target].name!=='You'?`If you are targeting, ${state.players[target].name} is the default pressure target unless ending the game would favor someone else.`:''}</p></div><div class="game-state-card"><h4>Known voids</h4><p>${voidRows.length?voidRows.join(' · '):'No opponent voids have been confirmed yet.'}</p></div><div class="game-state-card"><h4>Queens and spade pressure</h4><p>${queensPlayed}/2 queens have been played. ${effectiveHighSummary('S')}.</p></div><div class="game-state-card"><h4>Effective high cards</h4><p>${SUITS.map(effectiveHighSummary).join(' · ')}</p></div><div class="game-state-card"><h4>Moon threat</h4><p>${threatText}</p></div><div class="game-state-card"><h4>Game-ending pressure</h4><p>${endingRisk.length?`${endingRisk.join(', ')} would be at or above ${state.target} if the hand ended with current hand points. Do not force the game to end unless the resulting lowest total favors you.`:`No player is currently projected across the ${state.target}-point threshold from hand points alone.`}</p></div>${state.carryoverPoints?`<div class="game-state-card critical"><h4>Carryover pot</h4><p>${state.carryoverPoints} penalty points are carried into the next trick. Control of the next resolved trick temporarily overrides ordinary tactical priorities.</p></div>`:''}</div>`;
+}
+function pathwayImpactReason(card,f){
+  const p=buildHandPathway();
+  const bits=[];
+  const isExit=p.exit.startsWith(cardLabel(card));
+  if(isExit&&!wouldCurrentlyWin(card)) bits.push(`${cardLabel(card)} is your planned exit, so spending it now is costly unless the current phase specifically requires surrendering the lead`);
+  if(!wouldCurrentlyWin(card)&&RANK_VALUE[card.rank]>=8) bits.push(`shedding ${cardLabel(card)} now removes a card that could become an effective winner later while preserving lower mobility`);
+  if(f?.evolution?.voidCreated) bits.push(`this completes a ${suitName(card.suit)} void and advances the current pathway`);
+  if(wouldCurrentlyWin(card)&&p.phase.toLowerCase().includes('establish')) bits.push(`winning here is useful only if the resulting lead lets you advance ${p.phase.toLowerCase()}; otherwise the control is premature`);
+  if(wouldCurrentlyWin(card)&&p.phase.toLowerCase().includes('shed')) bits.push(`taking the lead conflicts with the current shedding phase unless the trick is clean and you have a planned exit immediately afterward`);
+  return bits;
+}
+function renderCurrentStrategicState(){
+  const box=$('currentStrategicState'); if(!box||!state.players.length)return;
+  const p=buildHandPathway();
+  box.innerHTML=`<div class="strategic-state-grid"><div><span>Strategy</span><strong>${STRATEGY_LABELS[p.strategy]}</strong></div><div><span>Current phase</span><strong>${p.phase}</strong></div><div><span>Immediate objective</span><strong>${p.immediate}</strong></div><div><span>Preferred entry</span><strong>${p.entry}</strong></div><div><span>Preferred exit</span><strong>${p.exit}</strong></div><div><span>Transition</span><strong>${p.transition}</strong></div></div>`;
+}
+
 function strategySummary(s){
   return {
     avoidance:'Minimize your own penalty exposure, build a void, preserve exits, and avoid taking control without a way to surrender it.',
@@ -1105,9 +1302,12 @@ function activateCoachTab(tab){
   document.querySelectorAll('.coach-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.coach-tab-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab));
   if(tab==='rejected') renderRejectedStrategies();
+  if(tab==='pathway') renderHandPathway();
   if(tab==='passing') renderPassingRecommendations();
   if(tab==='ingame') renderCardRecommendation();
+  if(tab==='gamestate') renderGameStateAnalysis();
   if(tab==='opponents') renderOpponentAnalysis();
+  if(tab==='posthand') renderPostHandAnalysis();
   if(tab==='postgame') renderPostGameAnalysis();
 }
 function updateCoachWeights(){
@@ -1281,7 +1481,7 @@ function moonRecommendationDetails(card,f){
 }
 function recommendationReason(card,f){
   if(state.coachStrategy==='soloMoon'||state.coachStrategy==='twoMoon'){
-    return moonRecommendationDetails(card,f).join('; ')+'.';
+    return [...moonRecommendationDetails(card,f),...pathwayImpactReason(card,f).slice(0,2)].join('; ')+'.';
   }
   const parts=[];
   if(f.sim.cancelled)parts.push('it cancels the matching card already on the table');
@@ -1290,20 +1490,24 @@ function recommendationReason(card,f){
   else parts.push(`it currently takes ${f.sim.points} penalty point${f.sim.points===1?'':'s'}`);
   if(f.evolution?.notes?.length) parts.push(...f.evolution.notes.slice(0,2));
   if(state.coachStrategy==='targeting'&&f.sim.winner!==0)parts.push(`the likely winner is ${state.players[f.sim.winner]?.name||'another player'}`);
+  parts.push(...pathwayImpactReason(card,f).slice(0,2));
   return parts.join('; ')+'.';
 }
 function renderCardRecommendation(){
   const box=$('cardRecommendation'); if(!box||!state.players.length)return;
+  renderCurrentStrategicState();
   if(state.phase==='passing'){box.innerHTML='<p>Select a strategy first. Passing guidance appears under Execution guidance.</p>';return;}
   if(state.phase!=='playing'||state.currentPlayer!==0){box.innerHTML='<p>The coach will rank legal cards when it is your turn. Meanwhile, watch for voids, cancellations, and who is collecting points.</p>'; renderPivotAlert(box); return;}
   const ranked=rankHumanLegalCards(); if(!ranked.length){box.innerHTML='<p>No legal card is available.</p>';return;}
   const r=ranked[0];
   const bars=[['Board',r.board],['Score',r.score],['Strategy',r.strategy]].map(([n,v])=>`<div class="factor-row"><span>${n}</span><div class="factor-track"><div class="factor-fill" style="width:${v}%"></div></div><strong>${Math.round(v)}</strong></div>`).join('');
   const alternatives=ranked.slice(1,3).map(x=>`${cardLabel(x.card)} (${Math.round(x.total)})`).join(' · ');
-  box.innerHTML=`<div class="recommended-card">Play ${cardLabel(r.card)}</div><p>${r.reason}</p><div class="factor-bars">${bars}</div>${alternatives?`<p class="small-copy">Next-best options: ${alternatives}</p>`:''}`; renderPivotAlert(box);
+  const plan=buildHandPathway();
+  const horizon=`<div class="horizon-grid"><div><strong>Immediate</strong><span>${r.sim.winner===0?'Control the current trick only if that control advances the phase.':'Lose this trick without wasting future mobility.'}</span></div><div><strong>Next few tricks</strong><span>${plan.immediate}</span></div><div><strong>Desired state</strong><span>${plan.desired}</span></div></div>`;
+  box.innerHTML=`<div class="recommended-card">Play ${cardLabel(r.card)}</div><p>${r.reason}</p>${horizon}<div class="factor-bars">${bars}</div>${alternatives?`<p class="small-copy">Next-best options: ${alternatives}</p>`:''}`; renderPivotAlert(box);
 }
 function inferOpponent(playerIndex){
-  const acts=state.actionLog.filter(a=>a.player===playerIndex); const scores=Object.fromEntries(PERSONAS.map(p=>[p,0])); const examples=[];
+  const name=state.players[playerIndex]?.name; const acts=state.opponentHistory[name]||[]; const scores=Object.fromEntries(PERSONAS.map(p=>[p,0])); const examples=[];
   for(const a of acts){const c=a.card, pts=a.before.trick.reduce((n,x)=>n+cardPoints(x.card),0), high=RANK_VALUE[c.rank]>=11, duplicate=a.before.trick.some(x=>x.card.suit===c.suit&&x.card.rank===c.rank), voidPlay=a.before.trick.length&&c.suit!==a.before.trick[0].card.suit;
     if(duplicate){scores['The Canceller']+=3;examples.push(`${cardLabel(c)} cancelled a matching card on trick ${a.trick}.`)}
     if(voidPlay&&cardPoints(c)>0){scores['The Suit Engineer']+=2;examples.push(`Used a void to discard ${cardLabel(c)} on trick ${a.trick}.`)}
@@ -1351,8 +1555,9 @@ function renderAssessmentBlock(title,a,extra=''){
   const pct=Math.round(a.adherence*100);
   return `<div class="post-card"><h4>${title}</h4>${extra}<p><strong>Strategic focus:</strong> ${a.focus}.</p><p><strong>Tactical alignment:</strong> ${a.decisions?pct+'% across '+a.decisions+' recorded decisions':'No recorded player decisions in this phase'}.</p>${a.misses.length?a.misses.map(m=>`<p class="evidence">• Trick ${m.trick}: played ${m.played}; coach preferred ${m.recommended}. ${m.reason}</p>`).join(''):'<p class="evidence">No major tactical deviations were recorded for this phase.</p>'}</div>`;
 }
-function renderPostGameAnalysis(){
-  const box=$('postGameAnalysis');if(!box)return;const a=state.lastPostAnalysis;
+
+function renderPostHandAnalysis(){
+  const box=$('postHandAnalysis'); if(!box)return; const a=state.lastPostAnalysis;
   if(!a){box.innerHTML='<p>Analysis will appear when the current hand ends.</p>';return;}
   const originalExtra=`<p><strong>Original strategy:</strong> ${STRATEGY_LABELS[a.originalAssessment.strategy]}</p>`;
   let html=renderAssessmentBlock('Part 1: Execution of the original strategy',a.originalAssessment,originalExtra);
@@ -1360,8 +1565,27 @@ function renderPostGameAnalysis(){
     const p=a.pivotAssessment;
     const pivotExtra=`<p><strong>Pivot:</strong> ${STRATEGY_LABELS[p.from]} → ${STRATEGY_LABELS[p.to]} on trick ${p.trick}</p><p><strong>Why the pivot was needed:</strong> ${p.trigger}</p>`;
     html+=renderAssessmentBlock('Part 2: Execution after the pivot',p,pivotExtra);
-  } else {
-    html+=`<div class="post-card"><h4>Part 2: Pivot assessment</h4><p>${a.pivotWasNeeded?'The original strategy ceased to be viable, but no strategy pivot was recorded. The tactical error was not merely the result; it was continuing to make decisions for a plan whose success condition had already disappeared.':'No pivot was needed. The original strategy remained structurally available through the end of the hand.'}</p></div>`;
-  }
+  } else html+=`<div class="post-card"><h4>Part 2: Pivot assessment</h4><p>${a.pivotWasNeeded?'The original strategy ceased to be viable, but no strategy pivot was recorded. The key error was continuing to pursue a position that could no longer exist.':'No pivot was required; evaluate the hand by whether the pathway was executed, not merely by the points scored.'}</p></div>`;
+  const phases=[...new Set(state.humanDecisionLog.map(d=>d.pathwayPhase).filter(Boolean))];
+  html+=`<div class="post-card"><h4>Pathway review</h4><p>${phases.length?`You moved through: ${phases.join(' → ')}.`:'No pathway phases were recorded.'}</p><p class="evidence">The important question is whether you seized control for a purpose, accomplished that purpose, and then ceded control when the purpose was complete.</p></div>`;
   box.innerHTML=html;
+}
+function buildGameLevelReview(){
+  const hands=state.handAnalysisHistory;
+  const decisions=hands.flatMap(h=>h.decisions||[]);
+  const earlyExitUses=decisions.filter(d=>d.reason&&/planned exit|preserv/i.test(d.reason)&&!d.matched).length;
+  const pivots=hands.reduce((n,h)=>n+(h.pivots?.length||0),0);
+  const missed=decisions.filter(d=>!d.matched).length;
+  const phaseCounts={}; decisions.forEach(d=>{if(d.pathwayPhase)phaseCounts[d.pathwayPhase]=(phaseCounts[d.pathwayPhase]||0)+1});
+  const commonPhase=Object.entries(phaseCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'not enough data yet';
+  return {hands:hands.length,decisions:decisions.length,missed,pivots,earlyExitUses,commonPhase};
+}
+
+function renderPostGameAnalysis(){
+  const box=$('postGameAnalysis'); if(!box)return;
+  const r=buildGameLevelReview();
+  if(!r.hands){box.innerHTML='<p>The game-level review develops as completed hands accumulate.</p>';return;}
+  const alignment=r.decisions?Math.round((r.decisions-r.missed)/r.decisions*100):0;
+  const status=state.gameOver?'Final game review':'Developing game review';
+  box.innerHTML=`<div class="post-card"><h4>${status}</h4><p><strong>Hands reviewed:</strong> ${r.hands}</p><p><strong>Recorded tactical decisions:</strong> ${r.decisions}</p><p><strong>Pathway alignment:</strong> ${alignment}% of recorded decisions matched the coach's top tactical recommendation.</p></div><div class="post-card"><h4>Strategic habits</h4><p><strong>Most common pathway phase:</strong> ${r.commonPhase}.</p><p><strong>Strategy pivots:</strong> ${r.pivots}. ${r.pivots?'Review whether each pivot occurred as soon as the original success condition disappeared.':'No pivots have been recorded yet.'}</p><p><strong>Potential mobility leak:</strong> ${r.earlyExitUses?`${r.earlyExitUses} decisions appear to have spent or ignored a planned exit when the coach preferred preserving mobility.`:'No repeated early-exit leak has been detected yet.'}</p></div><div class="post-card"><h4>What to improve next</h4><p>${r.missed>Math.max(3,r.decisions*.35)?'Your largest opportunity is connecting individual card choices to the current pathway phase. Before each play, ask what position the card is trying to create two or three tricks later.':'Your tactical choices are generally aligned; focus next on timing lead acquisition and surrender, especially when a phase objective has just been completed.'}</p></div>`;
 }
