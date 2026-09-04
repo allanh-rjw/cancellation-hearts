@@ -18,15 +18,9 @@
     if(id==='objective'){
       const identifiesDanger=has(t,/(q♠|queen of spades|q♥|queen of hearts|10♥|ten of hearts|high hearts?|future winners?|forced winners?|liabilit|danger)/);
       const statesObjective=has(t,/(avoid|prevent|keep.*from|not.*becom|don'?t.*want|dispose|dump|discard|shed|lose.*saf|protect|void|off lead|under higher)/);
-      if(identifiesDanger&&statesObjective){
-        return done('You answered both parts: you identified Q♠ and the higher hearts as the main future liabilities, and you stated the objective of keeping them from becoming forced winners or otherwise getting trapped in your hand.');
-      }
-      if(identifiesDanger){
-        return {recognized:'You picked out the main cards that can hurt you later, especially Q♠ and the higher hearts such as Q♥ and 10♥.',missing:'You identified the danger, but not yet what you want to prevent from happening to those cards.',nextQuestion:'What do you want to prevent from happening to Q♠, Q♥, and 10♥ as the hand develops?'};
-      }
-      if(has(t,/(shortest.*void|void.*shortest|clubs.*shortest)/)){
-        return {recognized:'You noticed that clubs are short, which can matter.',correction:'Being short in a suit is not enough by itself to make that suit the best void.',missing:'Start with the actual cards that are most likely to become costly later.',nextQuestion:'Which cards in this hand are most at risk of becoming forced winners or carrying a large penalty?'};
-      }
+      if(identifiesDanger&&statesObjective)return done('You answered both parts: you identified Q♠ and the higher hearts as the main future liabilities, and you stated the objective of keeping them from becoming forced winners or otherwise getting trapped in your hand.');
+      if(identifiesDanger)return {recognized:'You picked out the main cards that can hurt you later, especially Q♠ and the higher hearts such as Q♥ and 10♥.',missing:'You identified the danger, but not yet what you want to prevent from happening to those cards.',nextQuestion:'What do you want to prevent from happening to Q♠, Q♥, and 10♥ as the hand develops?'};
+      if(has(t,/(shortest.*void|void.*shortest|clubs.*shortest)/))return {recognized:'You noticed that clubs are short, which can matter.',correction:'Being short in a suit is not enough by itself to make that suit the best void.',missing:'Start with the actual cards that are most likely to become costly later.',nextQuestion:'Which cards in this hand are most at risk of becoming forced winners or carrying a large penalty?'};
       return {recognized:'You are looking for the cards that could become hard to get rid of later.',missing:'Name the specific cards in this hand that worry you most.',nextQuestion:'Which of Q♠, Q♥, 10♥, Q♣, or 10♦ would be most dangerous to still hold late in the hand, and why?'};
     }
 
@@ -62,7 +56,9 @@
 
     if(id==='preserve'){
       const preservesProtection=has(t,/(2♠|protect.*q♠|q♠.*protect)/);
-      const namesExit=has(t,/(5♣|6♦|6♥|7♥|low (club|diamond|heart)|low card).*(exit|get off lead|lose|surrender)|exit.*(5♣|6♦|6♥|7♥))/);
+      const mentionsLow=has(t,/(5♣|6♦|6♥|7♥|low club|low diamond|low heart|low card)/);
+      const statesExitJob=has(t,/(exit|get off lead|lose.*lead|surrender.*lead|later loser)/);
+      const namesExit=mentionsLow&&statesExitJob;
       if(preservesProtection&&namesExit)return done('You answered both parts: 2♠ must be preserved while Q♠ still depends on it, and you also identified a low card to keep as a later way to surrender the lead.');
       if(preservesProtection)return {recognized:'Right. 2♠ has a future job because it protects Q♠ through another spade round.',missing:'The second part was to preserve a separate low card that can help you get off lead later.',nextQuestion:'Besides 2♠, which low card would you keep as a later exit?'};
       if(namesExit)return {recognized:'You identified a useful low exit to preserve for later.',missing:'The other card that must survive is the one Q♠ still depends on for protection.',nextQuestion:'Which spade must you preserve while Q♠ is still exposed?'};
