@@ -11,7 +11,11 @@ const STEP_SKILLS = Object.freeze({
   control:["hearts.control_reasoning","causal_planning.control_requirements"],
   cards:["hearts.card_role_reasoning","causal_planning.state_transition"],
   next:["hearts.useful_void_reasoning","causal_planning.state_transition"],
-  preserve:["hearts.exit_preservation","causal_planning.preservation"]
+  preserve:["hearts.exit_preservation","causal_planning.preservation"],
+  threat:["hearts.threat_detection","causal_planning.contingency_revision"],
+  pivot:["hearts.minimum_intervention","causal_planning.contingency_revision"],
+  observe:["hearts.information_targeting","causal_planning.evidence_seeking"],
+  target:["hearts.smart_targeting","causal_planning.opponent_constraint_reasoning"]
 });
 
 function curatedProblems(){const candidates=[0,1].map((totalInteractions)=>legacy.selectExercise({selfLevel:"beginner",totalInteractions}));const seen=new Set();return candidates.filter((p)=>p&&p.id&&!seen.has(p.id)&&seen.add(p.id));}
