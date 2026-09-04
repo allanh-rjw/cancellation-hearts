@@ -1,151 +1,25 @@
-import { createAdaptiveTrainerCore } from "./adaptive-trainer-core.js";
 import { cancellationHeartsDomainAdapter } from "./hearts-domain-adapter.js";
+import { createAdaptiveExecutionPipeline } from "./runtime/execution-pipeline.js";
+import { createInMemoryRuntimeEventStore } from "./runtime/event-store.js";
 
-const STORAGE_KEY = "cancellationHearts.adaptiveTrainer.v1";
-const SELF_LEVELS = Object.freeze({
-  beginner:{label:"Beginner",description:"I know the rules, but I mostly think one trick at a time."},
-  developing:{label:"Developing",description:"I understand ideas like voids, exits, and queen protection, but I do not consistently build a whole-hand plan."},
-  advanced:{label:"Advanced",description:"I usually form a hand strategy and think several tricks ahead, but I want better sequencing, control, cancellation, targeting, and pivots."},
-  expert:{label:"Expert",description:"I can usually construct and execute a full-hand plan and want difficult positions that expose subtle strategic weaknesses."}
-});
+const STORAGE_KEY="cancellationHearts.adaptiveTrainer.runtime.v1";
+const SELF_LEVELS=Object.freeze({beginner:{label:"Beginner",description:"I know the rules, but I mostly think one trick at a time."},developing:{label:"Developing",description:"I understand ideas like voids, exits, and queen protection, but I do not consistently build a whole-hand plan."},advanced:{label:"Advanced",description:"I usually form a hand strategy and think several tricks ahead, but I want better sequencing, control, cancellation, targeting, and pivots."},expert:{label:"Expert",description:"I can usually construct and execute a full-hand plan and want difficult positions that expose subtle strategic weaknesses."}});
+function uid(prefix){return `${prefix}-${globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`}`;}
+function loadState(){try{const x=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");if(x&&x.version===1)return x;}catch(e){}return{version:1,selfLevel:null,examplesSeen:0,totalInteractions:0,learnerKey:uid("learner"),sessionId:uid("session"),runtimeEvents:[],currentHandAssisted:false,lastNextExperience:null};}
+function saveState(s){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch(e){}}
+function scoreValue(score){const n=Number(score?.value??score);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):.5;}
 
-function loadState(){
-  try {
-    const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");
-    if(parsed&&parsed.version===1)return parsed;
-  } catch(e) {}
-  return {version:1,selfLevel:null,examplesSeen:0,totalInteractions:0,events:[],lastNextExperience:null};
-}
-function saveState(state){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
-function boundedScore(x){return Math.max(0,Math.min(1,Number.isFinite(x)?x:0.5));}
-function feedbackFromAssessment(assessment){
-  const c=assessment.coaching||{};
-  const parts=[];
-  if(c.acknowledgement)parts.push(c.acknowledgement);
-  if(c.correction)parts.push(c.correction);
-  if(c.improvementNote)parts.push(c.improvementNote);
-  if(c.prompt)parts.push(c.prompt);
-  return [...new Set(parts.filter(Boolean))].join(" ");
+class AdaptiveTrainerBrowserFacade{
+  constructor(){this.state=loadState();this.profile=this.state;this.store=createInMemoryRuntimeEventStore(this.state.runtimeEvents||[]);this.runtime=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:this.store,reasoningInterpreter:null,coachRenderer:null});this.lastAssessment=null;this.lastLearnerState=null;}
+  selfAssess(level){this.state.selfLevel=SELF_LEVELS[level]?level:"developing";saveState(this.state);return this.profile;}
+  shouldShowWorkedExample(){return this.state.selfLevel==="beginner"&&this.state.examplesSeen<3;}
+  recordWorkedExample(){this.state.examplesSeen++;this.state.currentHandAssisted=true;saveState(this.state);}
+  scaffoldMode(skillKeys=[]){const beginner=this.state.selfLevel==="beginner",developing=this.state.selfLevel==="developing";const states=this.lastLearnerState?.skillStates||[];const relevant=states.filter((s)=>skillKeys.includes(s.constructId));const p=relevant.length?relevant.reduce((sum,s)=>sum+(s.independent?.probability??.5),0)/relevant.length:.5;const need=Math.max(0,Math.min(1,(1-p)*.7+(beginner?.3:developing?.15:0)));return{freeText:true,showFallback:need>.3,fallbackOpen:need>.78,hintDepth:need>.7?3:need>.45?2:1,challenge:need<.3};}
+  async evaluate(step,response,context={}){const text=String(response?.text||response?.choice||"").trim();const attemptId=uid(`hearts-${context.exercise?.id||"hand"}-${step.id}`);const pipelineResponse={text,choice:response?.choice||null,reasoning:text};const result=await this.runtime.submitAttempt({attemptId,sessionId:this.state.sessionId,learnerKey:this.state.learnerKey,problem:context.exercise,response:pipelineResponse,idempotencyKey:`${attemptId}:submit`,administration:{supportDose:this.state.currentHandAssisted?3:0,independent:!this.state.currentHandAssisted,supportBeforeResponse:this.state.currentHandAssisted?"worked-example":"none"},client:{surface:"cancellation-hearts-tutor",mode:"browser"},context:{...context,step,stepId:step.id,profile:this.profile,attemptNumber:1}});this.lastAssessment=result;this.lastLearnerState=result.learnerState;this.state.totalInteractions++;this.state.lastNextExperience={type:result.pedagogicalDecision.move,supportLevel:result.pedagogicalDecision.supportLevel,retryRequired:result.pedagogicalDecision.retryRequired};this.state.runtimeEvents=this.store.allEvents().slice(-1200);saveState(this.state);const domain=result.deterministicEvaluation.metadata?.domainDiagnosis||{};return{score:scoreValue(result.deterministicEvaluation.score),skills:[...(result.diagnosticEvidence.targetConstructIds||[])],flags:[...(result.deterministicEvaluation.findings||[])],gradeable:result.reasoningInterpretation?.status!=="uninterpreted",diagnosis:{...domain,answerStatus:result.deterministicEvaluation.status,reasoningStatus:result.reasoningInterpretation?.status||"deterministic",inferenceEligible:result.diagnosticEvidence.inferenceEligible},coaching:result.pedagogicalDecision,diagnosticInquiry:result.reasoningInterpretation?.status==="uninterpreted"?{status:"clarification-required"}:null,diagnosticProbeDecision:null,diagnosticInteractionDecision:null,nextExperience:this.state.lastNextExperience,feedback:result.coachOutput.text,scaffold:this.scaffoldMode(result.diagnosticEvidence.targetConstructIds||[]),runtime:{fastPath:result.fastPath,reasoningInterpretationStatus:result.reasoningInterpretation?.status||null,inferenceEligible:result.diagnosticEvidence.inferenceEligible,excludedReasoning:result.learnerEvidence.some((e)=>e.kind==="reasoning-excluded"),pedagogicalMove:result.pedagogicalDecision.move}};}
+  selectExercise(){const legacy=window.CancellationHeartsTutorAdapter;if(!legacy)throw new Error("Cancellation Hearts domain adapter is not loaded");this.state.currentHandAssisted=false;saveState(this.state);return legacy.selectExercise(this.profile);}
+  masterySummary(){const states=this.lastLearnerState?.skillStates||[];return states.map((s)=>({skill:s.constructId,value:s.independent?.probability??.5,evidence:s.independent?.observations??0,assisted:s.assisted?.probability??.5})).sort((a,b)=>a.value-b.value);}
+  reset(){localStorage.removeItem(STORAGE_KEY);this.state=loadState();this.profile=this.state;this.store=createInMemoryRuntimeEventStore();this.runtime=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:this.store,reasoningInterpreter:null,coachRenderer:null});this.lastAssessment=null;this.lastLearnerState=null;}
 }
 
-class AdaptiveTrainerBrowserFacade {
-  constructor(){
-    this.runtime=createAdaptiveTrainerCore(cancellationHeartsDomainAdapter);
-    this.state=loadState();
-    this.profile=this.state;
-    this.lastLearnerModel=null;
-    this.lastAssessment=null;
-  }
-
-  selfAssess(level){
-    this.state.selfLevel=SELF_LEVELS[level]?level:"developing";
-    saveState(this.state);
-    return this.profile;
-  }
-
-  shouldShowWorkedExample(){
-    return this.state.selfLevel==="beginner" && this.state.examplesSeen<3;
-  }
-
-  recordWorkedExample(){this.state.examplesSeen++;saveState(this.state);}
-
-  scaffoldMode(){
-    // UI affordance only. Pedagogical diagnosis and intervention decisions are made by the canonical core.
-    const beginner=this.state.selfLevel==="beginner";
-    const developing=this.state.selfLevel==="developing";
-    return {freeText:true,showFallback:beginner||developing,fallbackOpen:beginner&&this.state.totalInteractions<2,hintDepth:beginner?2:1,challenge:this.state.selfLevel==="expert"};
-  }
-
-  evaluate(step,response,context={}){
-    const assessment=this.runtime.assessAttempt({
-      problem:context.exercise,
-      response,
-      events:this.state.events,
-      context:{
-        ...context,
-        step,
-        profile:this.profile,
-        diagnosticProbeDecision:{
-          actionRelevance:"different-actions",
-          informationValue:"high",
-          cognitiveBurden:"low",
-          causalStatus:"unresolved",
-          freshEvidenceRequired:true,
-          probeBudgetExhausted:false
-        },
-        interactionBurden:{
-          sameTargetProbeCount:0,
-          consecutiveTrainerQuestions:0,
-          evidenceAlreadySupplied:false,
-          learnerRequestedExplanation:false,
-          cognitiveLoad:"low",
-          diagnosticUncertainty:"high",
-          recentDirectSupportCount:0,
-          recentAnswerSupplyCount:0,
-          reasoningPurpose:"diagnostic"
-        }
-      }
-    });
-    this.lastAssessment=assessment;
-    this.lastLearnerModel=assessment.learnerModel;
-    this.state.totalInteractions++;
-    this.state.lastNextExperience=assessment.nextExperience;
-    this.state.events.push({
-      type:"attempt-assessed",
-      at:new Date().toISOString(),
-      problemId:assessment.problem.id,
-      stepId:assessment.diagnosis.stepId,
-      score:boundedScore(assessment.diagnosis.score),
-      gradeable:assessment.diagnosis.gradeable,
-      skills:[...(assessment.diagnosis.skills||[])],
-      flags:[...(assessment.diagnosis.flags||[])],
-      diagnosticProbeStatus:assessment.diagnosticProbeDecision?.status||null,
-      interactionDecision:assessment.diagnosticInteractionDecision?.status||null
-    });
-    this.state.events=this.state.events.slice(-250);
-    saveState(this.state);
-    return {
-      score:boundedScore(assessment.diagnosis.score),
-      skills:[...(assessment.diagnosis.skills||[])],
-      flags:[...(assessment.diagnosis.flags||[])],
-      gradeable:assessment.diagnosis.gradeable,
-      diagnosis:assessment.diagnosis,
-      coaching:assessment.coaching,
-      diagnosticInquiry:assessment.diagnosticInquiry,
-      diagnosticProbeDecision:assessment.diagnosticProbeDecision,
-      diagnosticInteractionDecision:assessment.diagnosticInteractionDecision,
-      nextExperience:assessment.nextExperience,
-      feedback:feedbackFromAssessment(assessment),
-      scaffold:this.scaffoldMode()
-    };
-  }
-
-  selectExercise(){
-    const legacy=window.CancellationHeartsTutorAdapter;
-    if(!legacy)throw new Error("Cancellation Hearts domain adapter is not loaded");
-    return legacy.selectExercise(this.profile);
-  }
-
-  masterySummary(){
-    const skills=this.lastLearnerModel?.skills||{};
-    return Object.entries(skills).map(([skill,row])=>({skill,value:row.mastery,evidence:row.evidence})).sort((a,b)=>a.value-b.value);
-  }
-
-  reset(){localStorage.removeItem(STORAGE_KEY);this.state=loadState();this.profile=this.state;this.lastLearnerModel=null;this.lastAssessment=null;}
-}
-
-window.AdaptiveCoach={
-  AdaptiveCoachCore:AdaptiveTrainerBrowserFacade,
-  SELF_LEVELS,
-  canonical:true,
-  schemaVersion:3,
-  status:"domain-neutral-orchestration-boundary",
-  domainAdapterSchemaVersion:5
-};
-window.__canonicalAdaptiveTrainer={
-  runtimeStatus:"domain-neutral-orchestration-boundary",
-  coreSchemaVersion:3,
-  domainAdapterSchemaVersion:5,
-  domainId:cancellationHeartsDomainAdapter.domainId,
-  adapterVersion:cancellationHeartsDomainAdapter.version
-};
+window.AdaptiveCoach={AdaptiveCoachCore:AdaptiveTrainerBrowserFacade,SELF_LEVELS,canonical:true,runtimePrimary:true,schemaVersion:1,status:"adaptive-execution-pipeline-v2",domainAdapterSchemaVersion:5};
+window.__canonicalAdaptiveTrainer={runtimeStatus:"adaptive-execution-pipeline-v2",runtimePrimary:true,domainAdapterSchemaVersion:5,domainId:cancellationHeartsDomainAdapter.domainId,adapterVersion:cancellationHeartsDomainAdapter.version,deterministicFirst:true,uninterpretedReasoningExcludedFromInference:true};
