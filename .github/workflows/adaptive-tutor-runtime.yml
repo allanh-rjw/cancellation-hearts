@@ -32,6 +32,8 @@ jobs:
             adaptive-trainer/hearts-browser-integration.js
             hearts-response-completeness.js
             hearts-reasoning-evidence.js
+            hearts-advanced-reasoning.js
+            tutor-level-progression.js
             causal-loader.js
           )
           for file in "${files[@]}"; do
