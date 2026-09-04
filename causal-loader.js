@@ -33,13 +33,14 @@
 
   try{
     loadStyle('tutor.css');
-    await loadScript('adaptive-coach.js');
     await loadScript('hearts-tutor-adapter.js');
     await loadScript('hearts-feedback-diagnosis.js');
+    await import('./adaptive-trainer/hearts-browser-integration.js');
     await loadScript('hearts-tutor.js');
     await loadScript('tutor-strategy-orientation.js');
     await loadScript('tutor-situational-coaching.js');
     window.__adaptiveTutorLoaded=true;
+    window.__adaptiveTutorArchitecture='canonical-adaptive-trainer-core-v3/domain-adapter-v5';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
