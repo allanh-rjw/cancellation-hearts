@@ -45,6 +45,7 @@
     loadStyle('tutor.css');
     await loadScript('hearts-tutor-adapter.js');
     await loadScript('hearts-feedback-diagnosis.js');
+    await loadScript('hearts-reasoning-evidence.js');
     await import('./adaptive-trainer/hearts-browser-integration.js');
     await loadAsyncTutorUI();
     await loadScript('tutor-strategy-orientation.js');
