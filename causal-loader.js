@@ -37,6 +37,7 @@
     await loadScript('hearts-tutor-adapter.js');
     await loadScript('hearts-feedback-diagnosis.js');
     await loadScript('hearts-tutor.js');
+    await loadScript('tutor-strategy-orientation.js');
     window.__adaptiveTutorLoaded=true;
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
