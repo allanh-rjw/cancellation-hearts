@@ -1,0 +1,39 @@
+name: Adaptive Tutor Runtime
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify-adaptive-tutor-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check runtime module syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            adaptive-trainer/contracts/contract-utils.js
+            adaptive-trainer/contracts/runtime-contracts.js
+            adaptive-trainer/domain-adapter.js
+            adaptive-trainer/runtime/event-store.js
+            adaptive-trainer/runtime/evidence-ledger.js
+            adaptive-trainer/runtime/evidence-derivation.js
+            adaptive-trainer/runtime/learner-model-v1.js
+            adaptive-trainer/runtime/teaching-policy.js
+            adaptive-trainer/runtime/execution-pipeline.js
+            adaptive-trainer/hearts-domain-adapter.js
+            adaptive-trainer/hearts-browser-integration.js
+            hearts-reasoning-evidence.js
+            causal-loader.js
+          )
+          for file in "${files[@]}"; do
+            node --input-type=module --check < "$file"
+          done
+      - name: Run Hearts Adaptive Trainer smoke test
+        run: node --experimental-default-type=module scripts/verify-adaptive-tutor-runtime.mjs
