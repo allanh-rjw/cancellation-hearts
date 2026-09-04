@@ -1,5 +1,6 @@
 name: Adaptive Tutor Runtime
 
+# Runtime-primary verification gate for the shared Adaptive Trainer + Hearts adapter.
 on:
   push:
     branches: [main]
