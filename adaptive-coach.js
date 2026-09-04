@@ -26,6 +26,27 @@
   }
   function save(p){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(p));}catch(e){} }
   function clamp(x,a=0,b=1){return Math.max(a,Math.min(b,x));}
+
+  /*
+    Domain-neutral learner feedback policy.
+    Adapters return a structured diagnosis, not polished learner-facing prose:
+      diagnosis.recognized   what the learner understood
+      diagnosis.missing      the one important piece still missing
+      diagnosis.nextQuestion one concrete question that advances the reasoning
+      diagnosis.correction   optional direct correction for a misconception
+    The core owns how those pieces are presented to the learner.
+  */
+  function composeFeedback(result){
+    const d=result&&result.diagnosis;
+    if(!d) return result&&result.feedback ? result.feedback : 'Tell me what you are trying to accomplish with this position and what you would want to happen next.';
+    const parts=[];
+    if(d.recognized) parts.push(d.recognized);
+    if(d.correction) parts.push(d.correction);
+    if(d.missing) parts.push(d.missing);
+    if(d.nextQuestion) parts.push(d.nextQuestion);
+    return parts.join(' ');
+  }
+
   class AdaptiveCoachCore{
     constructor(adapter){this.adapter=adapter;this.profile=load();}
     selfAssess(level){
@@ -70,7 +91,7 @@
       this.profile.history.push({at:Date.now(),step:step.id,score:quality,skills:keys,flags:result.flags||[]});
       this.profile.history=this.profile.history.slice(-150);
       save(this.profile);
-      return {...result,scaffold:this.scaffoldMode(keys)};
+      return {...result,feedback:composeFeedback(result),scaffold:this.scaffoldMode(keys)};
     }
     selectExercise(){return this.adapter.selectExercise(this.profile);}
     masterySummary(){
@@ -78,5 +99,5 @@
     }
     reset(){localStorage.removeItem(STORAGE_KEY);this.profile=load();}
   }
-  window.AdaptiveCoach={AdaptiveCoachCore,SELF_LEVELS};
+  window.AdaptiveCoach={AdaptiveCoachCore,SELF_LEVELS,composeFeedback};
 })();
