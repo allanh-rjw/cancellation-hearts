@@ -35,6 +35,7 @@
     loadStyle('tutor.css');
     await loadScript('adaptive-coach.js');
     await loadScript('hearts-tutor-adapter.js');
+    await loadScript('hearts-feedback-diagnosis.js');
     await loadScript('hearts-tutor.js');
     window.__adaptiveTutorLoaded=true;
   }catch(error){
