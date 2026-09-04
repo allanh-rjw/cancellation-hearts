@@ -42,7 +42,7 @@
     if(!ADVANCED_PROMPTS[step?.id])return originalEvaluate(step,response,context,profile);
     const t=txt(response),d=diagnosis(step.id,t)||{};
     const complete=Boolean(d.recognized&&!d.missing&&!d.nextQuestion);
-    return {score:complete?.9:.58,skills:SKILLS[step.id],flags:[],gradeable:true,diagnosis:d};
+    return {score:complete?0.9:0.58,skills:SKILLS[step.id],flags:[],gradeable:true,diagnosis:d};
   };
   adapter.__me20AdvancedInstalled=true;
 })();
