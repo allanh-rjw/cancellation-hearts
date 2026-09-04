@@ -30,6 +30,7 @@ jobs:
             adaptive-trainer/runtime/execution-pipeline.js
             adaptive-trainer/hearts-domain-adapter.js
             adaptive-trainer/hearts-browser-integration.js
+            hearts-response-completeness.js
             hearts-reasoning-evidence.js
             causal-loader.js
           )
