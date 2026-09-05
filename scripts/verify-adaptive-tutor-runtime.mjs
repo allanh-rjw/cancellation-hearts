@@ -11,9 +11,24 @@ await import('../hearts-advanced-reasoning.js');
 const {cancellationHeartsDomainAdapter}=await import('../adaptive-trainer/hearts-domain-adapter.js');
 const {createAdaptiveExecutionPipeline}=await import('../adaptive-trainer/runtime/execution-pipeline.js');
 const {createInMemoryRuntimeEventStore}=await import('../adaptive-trainer/runtime/event-store.js');
+const {buildSkillRubricSummary,scoreLabel}=await import('../adaptive-trainer/student-profile-rubric.js');
 
 assert.equal(cancellationHeartsDomainAdapter.capabilities.trainingRuntime,true);
 assert.equal(cancellationHeartsDomainAdapter.version,2);
+
+const levelLabels={low:'Beginner',middle:'Developing',high:'Advanced',top:'Expert'};
+assert.equal(scoreLabel(7,levelLabels),'Beginner');
+assert.equal(scoreLabel(8,levelLabels),'Developing');
+assert.equal(scoreLabel(12,levelLabels),'Advanced');
+assert.equal(scoreLabel(15,levelLabels),'Expert');
+const rubricEvent=(kind,problemVersionId)=>({type:'learner-evidence-created',payload:{constructId:'hearts.objective_reasoning',kind,strength:1,problemVersionId}});
+const expertRubric=buildSkillRubricSummary({constructId:'hearts.objective_reasoning',labels:levelLabels,events:[
+  rubricEvent('independent-correct','p1'),rubricEvent('independent-correct','p2'),rubricEvent('independent-correct','p3'),
+  rubricEvent('transfer-success','t1'),rubricEvent('transfer-success','t2')
+]});
+assert.deepEqual(expertRubric.ratings,{understanding:4,consistency:4,independence:4,transfer:4});
+assert.equal(expertRubric.score,16);
+assert.equal(expertRubric.performanceLabel,'Expert');
 
 const problem=cancellationHeartsDomainAdapter.problemForId('guided-useful-void');
 assert.ok(problem);
@@ -49,6 +64,18 @@ const full=await fullPipeline.submitAttempt({
 assert.equal(full.reasoningInterpretation,null);
 assert.equal(full.fastPath,true);
 assert.ok(!full.learnerEvidence.some((e)=>e.kind==='reasoning-excluded'));
+
+const transferProblem={...problem,id:'smoke-transfer-hand',source:'random',title:'Transfer smoke hand'};
+const transferStore=createInMemoryRuntimeEventStore();
+const transferPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:transferStore});
+const transfer=await transferPipeline.submitAttempt({
+  attemptId:'smoke-transfer',sessionId:'smoke-transfer-session',learnerKey:'smoke-transfer-learner',problem:transferProblem,
+  response:{text:'I want to create a club void so that I can unload A♠ safely.',reasoning:'I want to create a club void so that I can unload A♠ safely.'},idempotencyKey:'smoke-transfer-submit',
+  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
+  context:{step,stepId:'objective',profile:{selfLevel:'beginner'},attemptNumber:1}
+});
+assert.ok(transfer.learnerEvidence.some(e=>e.kind==='transfer-success'));
+assert.ok(transfer.learnerState.skillStates.some(s=>s.transfer.observations>0));
 
 const queenProblem=cancellationHeartsDomainAdapter.problemForId('guided-queen-protection');
 assert.ok(queenProblem);
