@@ -48,6 +48,7 @@
 
   try{
     loadStyle('tutor.css');
+    loadStyle('tutor-rating.css');
     await loadScript('hearts-tutor-adapter.js');
     await loadScript('hearts-feedback-diagnosis.js');
     await loadScript('hearts-response-completeness.js');
