@@ -67,6 +67,7 @@
     await import('./adaptive-trainer/hearts-browser-integration.js');
     await import('./adaptive-trainer/student-profile-rubric.js');
     await import('./adaptive-trainer/hearts-assessment-integration.js');
+    await import('./adaptive-trainer/hearts-calibration-integration.js');
     await loadScript('tutor-passing-phase.js');
     await loadScript('tutor-diagnostic.js');
     await loadAsyncTutorUI();
@@ -75,7 +76,7 @@
     await loadScript('tutor-level-progression.js');
     await loadScript('tutor-progress-tab.js');
     window.__adaptiveTutorLoaded=true;
-    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/me20-diagnostic+progress+passing';
+    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
