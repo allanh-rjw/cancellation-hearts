@@ -54,12 +54,13 @@
     await loadScript('hearts-reasoning-evidence.js');
     await loadScript('hearts-advanced-reasoning.js');
     await import('./adaptive-trainer/hearts-browser-integration.js');
+    await import('./adaptive-trainer/student-profile-rubric.js');
     await loadAsyncTutorUI();
     await loadScript('tutor-strategy-orientation.js');
     await loadScript('tutor-situational-coaching.js');
     await loadScript('tutor-level-progression.js');
     window.__adaptiveTutorLoaded=true;
-    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/me20-progression';
+    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/me20-ochem-rubric';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
