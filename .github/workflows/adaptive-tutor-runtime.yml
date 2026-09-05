@@ -22,6 +22,7 @@ jobs:
             adaptive-trainer/contracts/contract-utils.js
             adaptive-trainer/contracts/runtime-contracts.js
             adaptive-trainer/domain-adapter.js
+            adaptive-trainer/student-profile-rubric.js
             adaptive-trainer/runtime/event-store.js
             adaptive-trainer/runtime/evidence-ledger.js
             adaptive-trainer/runtime/evidence-derivation.js
