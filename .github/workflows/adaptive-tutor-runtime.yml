@@ -36,6 +36,8 @@ jobs:
             hearts-advanced-reasoning.js
             hearts-passing-reasoning.js
             tutor-passing-phase.js
+            tutor-diagnostic.js
+            tutor-progress-tab.js
             tutor-level-progression.js
             causal-loader.js
           )
