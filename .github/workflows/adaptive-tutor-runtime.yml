@@ -34,6 +34,8 @@ jobs:
             hearts-response-completeness.js
             hearts-reasoning-evidence.js
             hearts-advanced-reasoning.js
+            hearts-passing-reasoning.js
+            tutor-passing-phase.js
             tutor-level-progression.js
             causal-loader.js
           )
