@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+globalThis.window=globalThis;
+globalThis.localStorage={getItem(){return null;},setItem(){},removeItem(){}};
+await import('../hearts-tutor-adapter.js');
+await import('../tutor-diagnostic.js');
+const diagnostic=globalThis.CancellationHeartsDiagnostic;
+assert.ok(diagnostic);
+assert.equal(diagnostic.HANDS.length,5);
+assert.ok(diagnostic.HANDS.filter(h=>h.phases.some(p=>p.pass)).length>=2);
+assert.ok(diagnostic.HANDS.some(h=>h.phases.some(p=>p.postpass)));
+assert.ok(new Set(diagnostic.HANDS.map(h=>h.strategy)).size>=4);
+const expert=[];for(let h=0;h<5;h++)for(let p=0;p<diagnostic.HANDS[h].phases.length;p++)expert.push({handIndex:h,phaseIndex:p,score:.95});
+const e=diagnostic.scoreDiagnostic(expert);assert.equal(e.total,16);assert.equal(e.level,'expert');
+const developing=[];for(let h=0;h<5;h++)for(let p=0;p<diagnostic.HANDS[h].phases.length;p++)developing.push({handIndex:h,phaseIndex:p,score:h<3?.78:.62});
+const d=diagnostic.scoreDiagnostic(developing);assert.ok(d.total>=8&&d.total<=14);assert.ok(['developing','advanced'].includes(d.level));
+const beginner=[];for(let h=0;h<5;h++)for(let p=0;p<diagnostic.HANDS[h].phases.length;p++)beginner.push({handIndex:h,phaseIndex:p,score:.35});
+const b=diagnostic.scoreDiagnostic(beginner);assert.ok(b.total<=7);assert.equal(b.level,'beginner');
+console.log('Tutor five-hand diagnostic verification passed.');
