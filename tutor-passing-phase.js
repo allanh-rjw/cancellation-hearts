@@ -29,7 +29,7 @@
       };
     }
     function renderPost(changed,prePlan,lastResult=null){
-      const postExercise={...exercise,hand:[...changed.hand],prePassHand:originalHand,passedCards:changed.passed,receivedCards:changed.incoming,passDirection:direction};
+      const postExercise={...exercise,expert:null,hand:[...changed.hand],prePassHand:originalHand,passedCards:changed.passed,receivedCards:changed.incoming,passDirection:direction,source:exercise.source||'curated'};
       body.innerHTML=`<div class="tutor-card passing-phase"><div class="eyebrow">After the pass</div><h3>Rebuild the pathway</h3><p>You passed <strong>${changed.passed.map(label).join(', ')}</strong> and received <strong>${changed.incoming.map(label).join(', ')}</strong>.</p><div class="passing-comparison"><div><h4>Before</h4>${cardsMarkup(originalHand)}</div><div><h4>After</h4>${cardsMarkup(changed.hand)}</div></div><div class="framework-callout"><strong>Your pre-pass plan:</strong> ${esc(prePlan)}</div><label class="passing-label" for="postPassPlan">Your pathway after the pass</label><textarea id="postPassPlan" rows="6" placeholder="What changed? What is safer or more dangerous now? What is your first objective, and which cards must be preserved for the next phase?"></textarea>${feedbackMarkup(lastResult)}<div class="tutor-actions"><button id="submitPostPass">Evaluate revised pathway</button></div></div>`;
       document.getElementById('submitPostPass').onclick=async()=>{
         const plan=document.getElementById('postPassPlan').value.trim();if(!plan){renderPost(changed,prePlan,{feedback:'Explain how the incoming cards changed or confirmed the pathway.'});return;}
