@@ -12,6 +12,8 @@ const STEP_SKILLS = Object.freeze({
   cards:["hearts.card_role_reasoning","causal_planning.state_transition"],
   next:["hearts.useful_void_reasoning","causal_planning.state_transition"],
   preserve:["hearts.exit_preservation","causal_planning.preservation"],
+  prepass_pathway:["hearts.passing_reasoning","causal_planning.state_transition","causal_planning.preservation"],
+  postpass_pathway:["hearts.pathway_revision","causal_planning.contingency_revision","causal_planning.preservation"],
   threat:["hearts.threat_detection","causal_planning.contingency_revision"],
   pivot:["hearts.minimum_intervention","causal_planning.contingency_revision"],
   observe:["hearts.information_targeting","causal_planning.evidence_seeking"],
