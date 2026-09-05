@@ -12,15 +12,15 @@
     postpass_pathway:['hearts.pathway_revision','causal_planning.contingency_revision','causal_planning.preservation']
   };
   function txt(response){return String(response?.text||response?.choice||'').toLowerCase();}
-  function cardMentions(text){return [...new Set((String(text).toUpperCase().match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}
+  function selectedPassCards(text){const match=String(text||'').match(/pass cards:\s*([^\n]+)/i);return [...new Set(((match?.[1]||'').toUpperCase().match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}
   function preDiagnosis(text){
-    const cards=cardMentions(text);
+    const cards=selectedPassCards(text);
     const pathway=/path|objective|goal|want to|trying to|avoid|protect|void|shed|dump|dispose|control|lead/.test(text);
     const purpose=/because|so that|so i|in order|to create|to remove|to keep|preserv|protect|avoid|shed|dump|void/.test(text);
     const future=/then|after|later|next|once|future|eventually/.test(text);
     if(cards.length===3&&pathway&&purpose&&future)return {correct:'You selected three cards and connected the pass to a multi-step hand pathway rather than treating the pass as simple card disposal.'};
     const missing=[];
-    if(cards.length!==3)missing.push('Name exactly the three cards you intend to pass.');
+    if(cards.length!==3)missing.push('Choose exactly three cards to pass.');
     if(!pathway)missing.push('State the hand-level objective you want the pass to support.');
     if(!purpose)missing.push('Explain what the three-card pass is meant to change or preserve.');
     if(!future)missing.push('Connect the pass to what you expect to do afterward.');
