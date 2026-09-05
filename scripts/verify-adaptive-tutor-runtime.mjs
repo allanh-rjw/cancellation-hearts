@@ -16,8 +16,12 @@ const {buildSkillRubricSummary,scoreLabel}=await import('../adaptive-trainer/stu
 
 assert.equal(cancellationHeartsDomainAdapter.capabilities.trainingRuntime,true);
 assert.equal(cancellationHeartsDomainAdapter.capabilities.assessment,true);
-assert.equal(cancellationHeartsDomainAdapter.version,3);
+assert.equal(cancellationHeartsDomainAdapter.capabilities.calibration,true);
+assert.equal(cancellationHeartsDomainAdapter.version,4);
 assert.equal(cancellationHeartsDomainAdapter.bindings.assessmentProvider,'adaptive-trainer assessment-core-v1');
+assert.equal(cancellationHeartsDomainAdapter.bindings.psychometricMetadataProvider,'hearts-expert-difficulty-priors + adaptive-trainer calibration-core-v1');
+assert.equal(cancellationHeartsDomainAdapter.difficultyPrior({id:'diag-1',difficulty:'Foundation'}).value,.2);
+assert.equal(cancellationHeartsDomainAdapter.difficultyPrior({id:'diag-5',difficulty:'High'}).value,.85);
 
 const levelLabels={low:'Beginner',middle:'Developing',high:'Advanced',top:'Expert'};
 assert.equal(scoreLabel(7,levelLabels),'Beginner');
