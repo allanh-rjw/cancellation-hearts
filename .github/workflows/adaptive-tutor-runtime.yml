@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check runtime and assessment module syntax
+      - name: Check runtime, assessment, and calibration module syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -22,10 +22,12 @@ jobs:
             adaptive-trainer/contracts/item-contracts.js
             adaptive-trainer/contracts/evidence-contracts.js
             adaptive-trainer/contracts/assessment-contracts.js
+            adaptive-trainer/contracts/calibration-contracts.js
             adaptive-trainer/contracts/index.js
             adaptive-trainer/contracts/runtime-contracts.js
             adaptive-trainer/domain-adapter.js
             adaptive-trainer/assessment-core.js
+            adaptive-trainer/calibration-core.js
             adaptive-trainer/student-profile-rubric.js
             adaptive-trainer/runtime/event-store.js
             adaptive-trainer/runtime/evidence-ledger.js
@@ -35,6 +37,7 @@ jobs:
             adaptive-trainer/runtime/execution-pipeline.js
             adaptive-trainer/hearts-domain-adapter.js
             adaptive-trainer/hearts-assessment-integration.js
+            adaptive-trainer/hearts-calibration-integration.js
             adaptive-trainer/hearts-browser-integration.js
             hearts-response-completeness.js
             hearts-reasoning-evidence.js
@@ -51,5 +54,5 @@ jobs:
           done
       - name: Run Hearts Adaptive Trainer smoke test
         run: node --experimental-default-type=module scripts/verify-adaptive-tutor-runtime.mjs
-      - name: Verify five-hand diagnostic through Assessment Core
+      - name: Verify five-hand diagnostic through Assessment and Calibration Cores
         run: node --experimental-default-type=module scripts/verify-tutor-diagnostic.mjs
