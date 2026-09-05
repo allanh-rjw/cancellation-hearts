@@ -46,3 +46,5 @@ jobs:
           done
       - name: Run Hearts Adaptive Trainer smoke test
         run: node --experimental-default-type=module scripts/verify-adaptive-tutor-runtime.mjs
+      - name: Verify five-hand diagnostic placement
+        run: node --experimental-default-type=module scripts/verify-tutor-diagnostic.mjs
