@@ -43,7 +43,7 @@ const step={id:'objective'};
 
 const passStore=createInMemoryRuntimeEventStore();
 const passPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:passStore});
-const prepassText='I want to reduce my high-card liabilities so that I can preserve low exits and later create a useful disposal route. I would pass KC, 8C, AS, then reassess whether clubs can still become a useful void.';
+const prepassText='I want to reduce my high-card liabilities while keeping 3C and 4D as low exits, so that I can later create a useful disposal route and then reassess the hand. Pass cards: KC, 8C, AS';
 const prepass=await passPipeline.submitAttempt({
   attemptId:'smoke-prepass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,
   response:{text:prepassText,reasoning:prepassText},idempotencyKey:'smoke-prepass-submit',
