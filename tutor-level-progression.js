@@ -8,7 +8,7 @@
   const LABELS={beginner:'Beginner',developing:'Developing',advanced:'Advanced',expert:'Expert'};
   const LABEL_TO_LEVEL={'Beginner':'beginner','Developing':'developing','Advanced':'advanced','Expert':'expert'};
   const CORE=['hearts.objective_reasoning','hearts.control_reasoning','hearts.card_role_reasoning','hearts.useful_void_reasoning','hearts.exit_preservation'];
-  const DEVELOPING=['hearts.threat_detection','hearts.minimum_intervention'];
+  const DEVELOPING=['hearts.passing_reasoning','hearts.pathway_revision','hearts.threat_detection','hearts.minimum_intervention'];
   const ADVANCED=['hearts.information_targeting','hearts.smart_targeting'];
   const ALL=[...CORE,...DEVELOPING,...ADVANCED];
   const SCORE_LABELS={low:'Beginner',middle:'Developing',high:'Advanced',top:'Expert'};
@@ -23,7 +23,7 @@
     if(['advanced','expert'].includes(level)){
       const developingSummary=aggregate([...CORE,...DEVELOPING]);
       if(!Number.isFinite(developingSummary.score))return {performanceLabel:'Developing',level:'developing',score:coreSummary.score,barPercent:coreSummary.barPercent,scope:'developing-evidence-needed',summary:developingSummary,missing:missingDimensions(developingSummary.skills)};
-      chosen=developingSummary;scope='core+threat-pivot';level=LABEL_TO_LEVEL[developingSummary.performanceLabel]||'developing';
+      chosen=developingSummary;scope='core+passing+threat-pivot';level=LABEL_TO_LEVEL[developingSummary.performanceLabel]||'developing';
       if(level==='expert'){
         const advancedSummary=aggregate(ALL);
         if(!Number.isFinite(advancedSummary.score))return {performanceLabel:'Advanced',level:'advanced',score:developingSummary.score,barPercent:developingSummary.barPercent,scope:'advanced-evidence-needed',summary:advancedSummary,missing:missingDimensions(advancedSummary.skills)};
@@ -63,7 +63,7 @@
     const s=resolveRating();
     if(!s.level){const missing=s.missing.length?s.missing.join(', '):'additional evidence';box.innerHTML=`<strong>${s.performanceLabel}</strong><span>Assessment uses understanding, consistency, independence, and transfer.</span><small>Still gathering: ${missing}.</small>`;return;}
     const bar=Number.isFinite(s.barPercent)?`<div class="tutor-rating-bar"><span style="width:${s.barPercent}%"></span></div>`:'';
-    const note=s.scope==='developing-evidence-needed'?'Threat and pivot evidence is still being gathered before the trainer can support an Advanced rating.':s.scope==='advanced-evidence-needed'?'Observation and targeting evidence is still being gathered before the trainer can support an Expert rating.':'Rating is based on understanding, consistency, independence, and transfer.';
+    const note=s.scope==='developing-evidence-needed'?'Passing, pathway revision, threat recognition, and minimum-intervention evidence are still being gathered before the trainer can support an Advanced rating.':s.scope==='advanced-evidence-needed'?'Observation and targeting evidence is still being gathered before the trainer can support an Expert rating.':'Rating is based on understanding, consistency, independence, and transfer.';
     box.innerHTML=`<strong>${s.performanceLabel}</strong>${bar}<span>${note}</span>`;
   }
   function showRatingChange(){
