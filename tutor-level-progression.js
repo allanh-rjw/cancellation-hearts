@@ -1,73 +1,77 @@
 (function(){
   const tutor=window.CancellationHeartsTutor;
-  if(!tutor?.core||tutor.__me20ProgressionInstalled)return;
+  const rubric=window.AdaptiveStudentProfileRubric;
+  if(!tutor?.core||!rubric||tutor.__me20ProgressionInstalled)return;
   const core=tutor.core;
   const STORAGE_KEY='cancellationHearts.adaptiveTrainer.runtime.v1';
   const ORDER=['beginner','developing','advanced','expert'];
   const LABELS={beginner:'Beginner',developing:'Developing',advanced:'Advanced',expert:'Expert'};
+  const LABEL_TO_LEVEL={'Beginner':'beginner','Developing':'developing','Advanced':'advanced','Expert':'expert'};
   const CORE=['hearts.objective_reasoning','hearts.control_reasoning','hearts.card_role_reasoning','hearts.useful_void_reasoning','hearts.exit_preservation'];
   const DEVELOPING=['hearts.threat_detection','hearts.minimum_intervention'];
   const ADVANCED=['hearts.information_targeting','hearts.smart_targeting'];
+  const ALL=[...CORE,...DEVELOPING,...ADVANCED];
+  const SCORE_LABELS={low:'Beginner',middle:'Developing',high:'Advanced',top:'Expert'};
 
-  function skillMap(){return new Map((core.lastLearnerState?.skillStates||[]).map(s=>[s.constructId,s]));}
-  function measure(ids){
-    const map=skillMap();
-    return ids.map(id=>{const s=map.get(id);return {id,p:s?.independent?.probability??0.5,n:s?.independent?.observations??0};});
-  }
-  function passes(ids,p=0.67,n=2){return measure(ids).every(x=>x.p>=p&&x.n>=n);}
-  function independentCount(){return (core.lastLearnerState?.skillStates||[]).reduce((sum,s)=>sum+(s.independent?.observations||0),0);}
-  function transferAttemptCount(){
-    const events=core.store?.allEvents?.()||[];
-    return events.filter(e=>e.type==='learner-response-submitted'&&e.payload?.problem?.metadata?.source==='random'&&e.payload?.administration?.independent!==false).length;
-  }
-  function status(){
-    const level=core.profile.selfLevel||'beginner';
-    const independent=independentCount(),transfer=transferAttemptCount();
-    if(level==='beginner')return {level,next:'developing',ready:passes(CORE)&&independent>=10,requirements:measure(CORE),summary:`${independent}/10 independent core responses; each core skill needs 2 independent successes with stable evidence.`};
-    if(level==='developing')return {level,next:'advanced',ready:passes(CORE)&&passes(DEVELOPING)&&independent>=14,requirements:[...measure(CORE),...measure(DEVELOPING)],summary:`${independent}/14 independent responses; threat detection and minimum-intervention pivots must each be demonstrated at least twice.`};
-    if(level==='advanced')return {level,next:'expert',ready:passes(CORE)&&passes(DEVELOPING)&&passes(ADVANCED)&&transfer>=18,requirements:[...measure(DEVELOPING),...measure(ADVANCED)],summary:`${transfer}/18 independent transfer-hand responses; observation and smart targeting must each be demonstrated at least twice.`};
-    return {level,next:null,ready:false,requirements:[],summary:'Expert level. The trainer continues tracking transfer, targeting, contingency, and calibration evidence.'};
+  function events(){return core.store?.allEvents?.()||[];}
+  function aggregate(ids){return rubric.buildAggregateRubricSummary({constructIds:ids,events:events(),labels:SCORE_LABELS});}
+  function missingDimensions(skills){const missing=new Set();for(const skill of skills)for(const [dimension,value] of Object.entries(skill.ratings||{}))if(!Number.isFinite(value))missing.add(dimension);return [...missing];}
+  function resolveRating(){
+    const coreSummary=aggregate(CORE);
+    if(!Number.isFinite(coreSummary.score))return {performanceLabel:coreSummary.performanceLabel,level:null,score:null,barPercent:null,scope:'core',summary:coreSummary,missing:missingDimensions(coreSummary.skills)};
+    let level=LABEL_TO_LEVEL[coreSummary.performanceLabel]||'beginner',chosen=coreSummary,scope='core';
+    if(['advanced','expert'].includes(level)){
+      const developingSummary=aggregate([...CORE,...DEVELOPING]);
+      if(!Number.isFinite(developingSummary.score))return {performanceLabel:'Developing',level:'developing',score:coreSummary.score,barPercent:coreSummary.barPercent,scope:'developing-evidence-needed',summary:developingSummary,missing:missingDimensions(developingSummary.skills)};
+      chosen=developingSummary;scope='core+threat-pivot';level=LABEL_TO_LEVEL[developingSummary.performanceLabel]||'developing';
+      if(level==='expert'){
+        const advancedSummary=aggregate(ALL);
+        if(!Number.isFinite(advancedSummary.score))return {performanceLabel:'Advanced',level:'advanced',score:developingSummary.score,barPercent:developingSummary.barPercent,scope:'advanced-evidence-needed',summary:advancedSummary,missing:missingDimensions(advancedSummary.skills)};
+        chosen=advancedSummary;scope='full';level=LABEL_TO_LEVEL[advancedSummary.performanceLabel]||'advanced';
+      }
+    }
+    return {performanceLabel:LABELS[level],level,score:chosen.score,barPercent:chosen.barPercent,scope,summary:chosen,missing:missingDimensions(chosen.skills)};
   }
   function persist(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(core.state));}catch(e){}}
-  function maybePromote(){
-    const s=status();
-    if(!s.ready||!s.next)return null;
-    const from=s.level,to=s.next;
-    core.state.selfLevel=to;core.profile=core.state;
-    core.state.lastPromotion={from,to,at:new Date().toISOString()};
-    persist();
-    return {from,to};
+  function applyRating(){
+    const rating=resolveRating();
+    if(!rating.level)return {rating,change:null};
+    const from=core.profile.selfLevel||'beginner',to=rating.level;
+    if(from===to)return {rating,change:null};
+    core.state.selfLevel=to;core.profile=core.state;core.state.lastRatingChange={from,to,at:new Date().toISOString(),score:rating.score};persist();
+    return {rating,change:{from,to}};
   }
-  const originalEvaluate=core.evaluate.bind(core);
-  core.evaluate=async function(...args){
-    const result=await originalEvaluate(...args);
-    const promotion=maybePromote();
-    result.promotion=promotion;
-    result.levelProgress=status();
-    return result;
+  function transferEvidenceCount(){return events().filter(e=>e.type==='learner-evidence-created'&&['transfer-success','transfer-failure'].includes(e.payload?.kind)).length;}
+  function shouldRunTransferProbe(){const interactions=core.state.totalInteractions||0,last=core.state.lastTransferProbeAtInteraction??-999;return interactions>=10&&(transferEvidenceCount()===0||interactions-last>=15);}
+  const originalSelect=core.selectExercise.bind(core);
+  core.selectExercise=function(){
+    const ordinary=originalSelect();
+    if(!shouldRunTransferProbe())return ordinary;
+    const legacy=window.CancellationHeartsTutorAdapter,transfer=legacy?.selectExercise?.({...core.profile,selfLevel:'advanced'});
+    if(transfer?.source!=='random')return ordinary;
+    core.state.lastTransferProbeAtInteraction=core.state.totalInteractions||0;core.state.currentHandAssisted=false;persist();
+    return {...transfer,assessmentProbe:'transfer',title:`Transfer check: ${transfer.title||'new hand'}`};
   };
-  core.promotionStatus=status;
 
-  function pct(x){return Math.round((x||0)*100);}
+  const originalEvaluate=core.evaluate.bind(core);
+  core.evaluate=async function(...args){const result=await originalEvaluate(...args);const {rating,change}=applyRating();result.ratingChange=change;result.levelProgress=rating;return result;};
+  core.promotionStatus=resolveRating;core.studentRating=resolveRating;
+
   function renderProgress(){
-    const root=document.getElementById('tutorRoot');
-    const top=root?.querySelector('.tutor-top');
-    if(!top)return;
-    let box=document.getElementById('tutorLevelProgress');
-    if(!box){box=document.createElement('div');box.id='tutorLevelProgress';box.className='tutor-level-progress';top.appendChild(box);}
-    const s=status();
-    const weak=s.requirements.filter(x=>x.n<2||x.p<0.67).slice(0,3);
-    box.innerHTML=`<strong>${LABELS[s.level]}${s.next?` → ${LABELS[s.next]}`:''}</strong><span>${s.summary}</span>${weak.length?`<small>Still building: ${weak.map(x=>`${x.id.split('.').pop().replaceAll('_',' ')} ${x.n}/2, ${pct(x.p)}%`).join(' · ')}</small>`:''}`;
+    const root=document.getElementById('tutorRoot'),top=root?.querySelector('.tutor-top');if(!top)return;
+    let box=document.getElementById('tutorLevelProgress');if(!box){box=document.createElement('div');box.id='tutorLevelProgress';box.className='tutor-level-progress';top.appendChild(box);}
+    const s=resolveRating();
+    if(!s.level){const missing=s.missing.length?s.missing.join(', '):'additional evidence';box.innerHTML=`<strong>${s.performanceLabel}</strong><span>Assessment uses understanding, consistency, independence, and transfer.</span><small>Still gathering: ${missing}.</small>`;return;}
+    const bar=Number.isFinite(s.barPercent)?`<div class="tutor-rating-bar"><span style="width:${s.barPercent}%"></span></div>`:'';
+    const note=s.scope==='developing-evidence-needed'?'Threat and pivot evidence is still being gathered before the trainer can support an Advanced rating.':s.scope==='advanced-evidence-needed'?'Observation and targeting evidence is still being gathered before the trainer can support an Expert rating.':'Rating is based on understanding, consistency, independence, and transfer.';
+    box.innerHTML=`<strong>${s.performanceLabel}</strong>${bar}<span>${note}</span>`;
   }
-  function showPromotion(){
-    const p=core.state.lastPromotion;if(!p||p.shown)return;
-    const body=document.getElementById('tutorBody');if(!body)return;
-    const card=document.createElement('div');card.className='tutor-card promotion-card';
-    card.innerHTML=`<div class="eyebrow">Level promotion</div><h3>${LABELS[p.from]} → ${LABELS[p.to]}</h3><p>Your independent performance now supports the next teaching level. New pathway questions will appear on the next hand.</p>`;
+  function showRatingChange(){
+    const p=core.state.lastRatingChange;if(!p||p.shown)return;const body=document.getElementById('tutorBody');if(!body)return;
+    const card=document.createElement('div');card.className='tutor-card promotion-card';const upward=ORDER.indexOf(p.to)>ORDER.indexOf(p.from);
+    card.innerHTML=`<div class="eyebrow">Assessment update</div><h3>${LABELS[p.to]}</h3><p>${upward?'Your recent evidence now supports a higher teaching level.':'The trainer is temporarily adjusting the teaching level while it gathers stronger evidence.'} The next hand will use the matching pathway.</p>`;
     body.prepend(card);p.shown=true;persist();
   }
-  const observer=new MutationObserver(()=>{renderProgress();showPromotion();});
-  const root=document.getElementById('tutorRoot');if(root)observer.observe(root,{subtree:true,childList:true});
-  renderProgress();
+  const observer=new MutationObserver(()=>{renderProgress();showRatingChange();});const root=document.getElementById('tutorRoot');if(root)observer.observe(root,{subtree:true,childList:true});renderProgress();
   tutor.__me20ProgressionInstalled=true;
 })();
