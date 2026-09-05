@@ -15,7 +15,9 @@ const {createInMemoryRuntimeEventStore}=await import('../adaptive-trainer/runtim
 const {buildSkillRubricSummary,scoreLabel}=await import('../adaptive-trainer/student-profile-rubric.js');
 
 assert.equal(cancellationHeartsDomainAdapter.capabilities.trainingRuntime,true);
-assert.equal(cancellationHeartsDomainAdapter.version,2);
+assert.equal(cancellationHeartsDomainAdapter.capabilities.assessment,true);
+assert.equal(cancellationHeartsDomainAdapter.version,3);
+assert.equal(cancellationHeartsDomainAdapter.bindings.assessmentProvider,'adaptive-trainer assessment-core-v1');
 
 const levelLabels={low:'Beginner',middle:'Developing',high:'Advanced',top:'Expert'};
 assert.equal(scoreLabel(7,levelLabels),'Beginner');
@@ -44,33 +46,18 @@ const step={id:'objective'};
 const passStore=createInMemoryRuntimeEventStore();
 const passPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:passStore});
 const prepassText='I want to reduce my high-card liabilities while keeping 3C and 4D as low exits, so that I can later create a useful disposal route and then reassess the hand. Pass cards: KC, 8C, AS';
-const prepass=await passPipeline.submitAttempt({
-  attemptId:'smoke-prepass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,
-  response:{text:prepassText,reasoning:prepassText},idempotencyKey:'smoke-prepass-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step:{id:'prepass_pathway'},stepId:'prepass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const prepass=await passPipeline.submitAttempt({attemptId:'smoke-prepass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,response:{text:prepassText,reasoning:prepassText},idempotencyKey:'smoke-prepass-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step:{id:'prepass_pathway'},stepId:'prepass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(prepass.deterministicEvaluation.status,'correct');
 assert.ok(prepass.diagnosticEvidence.targetConstructIds.includes('hearts.passing_reasoning'));
 assert.ok(prepass.diagnosticEvidence.targetConstructIds.includes('causal_planning.preservation'));
 const postpassText='The incoming cards change the shape of the hand, so my first objective now is to stay off lead while I identify the safest disposal route. I will preserve my lowest exits because I need them after that disposal succeeds.';
-const postpass=await passPipeline.submitAttempt({
-  attemptId:'smoke-postpass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,
-  response:{text:postpassText,reasoning:postpassText},idempotencyKey:'smoke-postpass-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step:{id:'postpass_pathway'},stepId:'postpass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const postpass=await passPipeline.submitAttempt({attemptId:'smoke-postpass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,response:{text:postpassText,reasoning:postpassText},idempotencyKey:'smoke-postpass-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step:{id:'postpass_pathway'},stepId:'postpass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(postpass.deterministicEvaluation.status,'correct');
 assert.ok(postpass.diagnosticEvidence.targetConstructIds.includes('hearts.pathway_revision'));
 
 const terseStore=createInMemoryRuntimeEventStore();
 const tersePipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:terseStore});
-const terse=await tersePipeline.submitAttempt({
-  attemptId:'smoke-terse',sessionId:'smoke-session',learnerKey:'smoke-learner',problem,
-  response:{text:'clubs',reasoning:'clubs'},idempotencyKey:'smoke-terse-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const terse=await tersePipeline.submitAttempt({attemptId:'smoke-terse',sessionId:'smoke-session',learnerKey:'smoke-learner',problem,response:{text:'clubs',reasoning:'clubs'},idempotencyKey:'smoke-terse-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(terse.reasoningInterpretation.status,'uninterpreted');
 assert.equal(terse.diagnosticEvidence.inferenceEligible,false);
 assert.equal(terse.pedagogicalDecision.move,'clarify-reasoning');
@@ -80,12 +67,7 @@ assert.match(terse.coachOutput.text,/reason|why|what/i);
 
 const fullStore=createInMemoryRuntimeEventStore();
 const fullPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:fullStore});
-const full=await fullPipeline.submitAttempt({
-  attemptId:'smoke-full',sessionId:'smoke-session-2',learnerKey:'smoke-learner-2',problem,
-  response:{text:'I want to create a club void so that I can unload A♠ safely.',reasoning:'I want to create a club void so that I can unload A♠ safely.'},idempotencyKey:'smoke-full-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const full=await fullPipeline.submitAttempt({attemptId:'smoke-full',sessionId:'smoke-session-2',learnerKey:'smoke-learner-2',problem,response:{text:'I want to create a club void so that I can unload A♠ safely.',reasoning:'I want to create a club void so that I can unload A♠ safely.'},idempotencyKey:'smoke-full-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(full.reasoningInterpretation,null);
 assert.equal(full.fastPath,true);
 assert.ok(!full.learnerEvidence.some((e)=>e.kind==='reasoning-excluded'));
@@ -93,12 +75,7 @@ assert.ok(!full.learnerEvidence.some((e)=>e.kind==='reasoning-excluded'));
 const transferProblem={...problem,id:'smoke-transfer-hand',source:'random',title:'Transfer smoke hand'};
 const transferStore=createInMemoryRuntimeEventStore();
 const transferPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:transferStore});
-const transfer=await transferPipeline.submitAttempt({
-  attemptId:'smoke-transfer',sessionId:'smoke-transfer-session',learnerKey:'smoke-transfer-learner',problem:transferProblem,
-  response:{text:'I want to create a club void so that I can unload A♠ safely.',reasoning:'I want to create a club void so that I can unload A♠ safely.'},idempotencyKey:'smoke-transfer-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step,stepId:'objective',profile:{selfLevel:'beginner'},attemptNumber:1}
-});
+const transfer=await transferPipeline.submitAttempt({attemptId:'smoke-transfer',sessionId:'smoke-transfer-session',learnerKey:'smoke-transfer-learner',problem:transferProblem,response:{text:'I want to create a club void so that I can unload A♠ safely.',reasoning:'I want to create a club void so that I can unload A♠ safely.'},idempotencyKey:'smoke-transfer-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step,stepId:'objective',profile:{selfLevel:'beginner'},attemptNumber:1}});
 assert.ok(transfer.learnerEvidence.some(e=>e.kind==='transfer-success'||e.kind==='transfer-failure'));
 assert.ok(transfer.learnerState.skillStates.some(s=>s.transfer.observations>0));
 
@@ -107,12 +84,7 @@ assert.ok(queenProblem);
 const completeText='I want to avoid allowing the 10h, Qh and Qs from becoming forced winners.';
 const completeStore=createInMemoryRuntimeEventStore();
 const completePipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:completeStore});
-const complete=await completePipeline.submitAttempt({
-  attemptId:'smoke-complete-two-part',sessionId:'smoke-session-3',learnerKey:'smoke-learner-3',problem:queenProblem,
-  response:{text:completeText,reasoning:completeText},idempotencyKey:'smoke-complete-two-part-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const complete=await completePipeline.submitAttempt({attemptId:'smoke-complete-two-part',sessionId:'smoke-session-3',learnerKey:'smoke-learner-3',problem:queenProblem,response:{text:completeText,reasoning:completeText},idempotencyKey:'smoke-complete-two-part-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step,stepId:'objective',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(complete.reasoningInterpretation,null);
 assert.equal(complete.fastPath,true);
 assert.equal(complete.deterministicEvaluation.status,'correct');
@@ -123,12 +95,7 @@ assert.doesNotMatch(complete.coachOutput.text,/next thing to decide|how you want
 const threatText='If one player keeps taking hearts and still controls the lead, I would start treating a moon attempt as a real threat.';
 const threatStore=createInMemoryRuntimeEventStore();
 const threatPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:threatStore});
-const threat=await threatPipeline.submitAttempt({
-  attemptId:'smoke-threat',sessionId:'smoke-session-4',learnerKey:'smoke-learner-4',problem,
-  response:{text:threatText,reasoning:threatText},idempotencyKey:'smoke-threat-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step:{id:'threat'},stepId:'threat',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const threat=await threatPipeline.submitAttempt({attemptId:'smoke-threat',sessionId:'smoke-session-4',learnerKey:'smoke-learner-4',problem,response:{text:threatText,reasoning:threatText},idempotencyKey:'smoke-threat-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step:{id:'threat'},stepId:'threat',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.equal(threat.fastPath,true);
 assert.ok(threat.diagnosticEvidence.targetConstructIds.includes('hearts.threat_detection'));
 assert.ok(threat.deterministicEvaluation.score.value>=0.85);
@@ -136,24 +103,14 @@ assert.ok(threat.deterministicEvaluation.score.value>=0.85);
 const pivotText='I would make the minimum play needed to break the moon and then return to my original avoidance plan.';
 const pivotStore=createInMemoryRuntimeEventStore();
 const pivotPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:pivotStore});
-const pivot=await pivotPipeline.submitAttempt({
-  attemptId:'smoke-pivot',sessionId:'smoke-session-5',learnerKey:'smoke-learner-5',problem,
-  response:{text:pivotText,reasoning:pivotText},idempotencyKey:'smoke-pivot-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step:{id:'pivot'},stepId:'pivot',profile:{selfLevel:'developing'},attemptNumber:1}
-});
+const pivot=await pivotPipeline.submitAttempt({attemptId:'smoke-pivot',sessionId:'smoke-session-5',learnerKey:'smoke-learner-5',problem,response:{text:pivotText,reasoning:pivotText},idempotencyKey:'smoke-pivot-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step:{id:'pivot'},stepId:'pivot',profile:{selfLevel:'developing'},attemptNumber:1}});
 assert.ok(pivot.diagnosticEvidence.targetConstructIds.includes('hearts.minimum_intervention'));
 assert.ok(pivot.deterministicEvaluation.score.value>=0.85);
 
 const targetText='I would target a player only if they had shown a void or exposed high cards and the score made the risk worthwhile; otherwise I would keep my own pathway.';
 const targetStore=createInMemoryRuntimeEventStore();
 const targetPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:targetStore});
-const target=await targetPipeline.submitAttempt({
-  attemptId:'smoke-target',sessionId:'smoke-session-6',learnerKey:'smoke-learner-6',problem,
-  response:{text:targetText,reasoning:targetText},idempotencyKey:'smoke-target-submit',
-  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
-  context:{step:{id:'target'},stepId:'target',profile:{selfLevel:'advanced'},attemptNumber:1}
-});
+const target=await targetPipeline.submitAttempt({attemptId:'smoke-target',sessionId:'smoke-session-6',learnerKey:'smoke-learner-6',problem,response:{text:targetText,reasoning:targetText},idempotencyKey:'smoke-target-submit',administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},context:{step:{id:'target'},stepId:'target',profile:{selfLevel:'advanced'},attemptNumber:1}});
 assert.ok(target.diagnosticEvidence.targetConstructIds.includes('hearts.smart_targeting'));
 assert.ok(target.deterministicEvaluation.score.value>=0.85);
 
