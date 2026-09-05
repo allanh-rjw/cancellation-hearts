@@ -8,6 +8,7 @@ await import('../hearts-feedback-diagnosis.js');
 await import('../hearts-response-completeness.js');
 await import('../hearts-reasoning-evidence.js');
 await import('../hearts-advanced-reasoning.js');
+await import('../hearts-passing-reasoning.js');
 const {cancellationHeartsDomainAdapter}=await import('../adaptive-trainer/hearts-domain-adapter.js');
 const {createAdaptiveExecutionPipeline}=await import('../adaptive-trainer/runtime/execution-pipeline.js');
 const {createInMemoryRuntimeEventStore}=await import('../adaptive-trainer/runtime/event-store.js');
@@ -32,11 +33,35 @@ assert.equal(expertRubric.performanceLabel,'Expert');
 
 const problem=cancellationHeartsDomainAdapter.problemForId('guided-useful-void');
 assert.ok(problem);
+assert.ok(problem.prompts.prepass_pathway);
+assert.ok(problem.prompts.postpass_pathway);
 assert.ok(problem.prompts.threat);
 assert.ok(problem.prompts.pivot);
 assert.ok(problem.prompts.observe);
 assert.ok(problem.prompts.target);
 const step={id:'objective'};
+
+const passStore=createInMemoryRuntimeEventStore();
+const passPipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:passStore});
+const prepassText='I want to reduce my high-card liabilities so that I can preserve low exits and later create a useful disposal route. I would pass KC, 8C, AS, then reassess whether clubs can still become a useful void.';
+const prepass=await passPipeline.submitAttempt({
+  attemptId:'smoke-prepass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,
+  response:{text:prepassText,reasoning:prepassText},idempotencyKey:'smoke-prepass-submit',
+  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
+  context:{step:{id:'prepass_pathway'},stepId:'prepass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}
+});
+assert.equal(prepass.deterministicEvaluation.status,'correct');
+assert.ok(prepass.diagnosticEvidence.targetConstructIds.includes('hearts.passing_reasoning'));
+assert.ok(prepass.diagnosticEvidence.targetConstructIds.includes('causal_planning.preservation'));
+const postpassText='The incoming cards change the shape of the hand, so my first objective now is to stay off lead while I identify the safest disposal route. I will preserve my lowest exits because I need them after that disposal succeeds.';
+const postpass=await passPipeline.submitAttempt({
+  attemptId:'smoke-postpass',sessionId:'smoke-pass-session',learnerKey:'smoke-pass-learner',problem,
+  response:{text:postpassText,reasoning:postpassText},idempotencyKey:'smoke-postpass-submit',
+  administration:{supportDose:0,independent:true,supportBeforeResponse:'none'},
+  context:{step:{id:'postpass_pathway'},stepId:'postpass_pathway',profile:{selfLevel:'developing'},attemptNumber:1}
+});
+assert.equal(postpass.deterministicEvaluation.status,'correct');
+assert.ok(postpass.diagnosticEvidence.targetConstructIds.includes('hearts.pathway_revision'));
 
 const terseStore=createInMemoryRuntimeEventStore();
 const tersePipeline=createAdaptiveExecutionPipeline({domainAdapter:cancellationHeartsDomainAdapter,eventStore:terseStore});
