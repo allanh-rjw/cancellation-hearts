@@ -5,12 +5,13 @@ import vm from 'node:vm';
 function fakeClassList(){return {add(){},remove(){},toggle(){},contains(){return false;}};}
 function fakeElement(id=''){
   return {
-    id, value:'', checked:false, disabled:false, open:false, textContent:'', innerHTML:'', dataset:{}, style:{},
+    id, value:'', checked:false, disabled:false, open:false, textContent:'', innerHTML:'', dataset:{}, style:{}, firstElementChild:null,
     classList:fakeClassList(), previousElementSibling:{textContent:''},
-    addEventListener(){}, setAttribute(){}, focus(){}, select(){}, appendChild(){}, insertAdjacentHTML(){},
+    addEventListener(){}, setAttribute(){}, focus(){}, select(){}, appendChild(child){return child;}, insertAdjacentHTML(){},
     showModal(){this.open=true;}, close(){this.open=false;}, after(){}, querySelector(){return fakeElement();}, querySelectorAll(){return [];}
   };
 }
+function createdElement(){const node=fakeElement();node.firstElementChild=fakeElement();return node;}
 const elements=new Map();
 const defaults={personaMode:'balanced',gameMode:'standard',practiceType:'solo',practiceStrength:'strong',targetScore:'100',difficulty:'medium',playSpeed:'1',boardWeight:'33',scoreWeight:'33',strategyWeight:'34'};
 function element(id){
@@ -21,7 +22,7 @@ const storage=()=>{const values=new Map();return {getItem:key=>values.get(key)??
 const context={
   console, Math, Date, JSON, Set, Map, Object, Array, String, Number, Boolean, RegExp, Promise,
   localStorage:storage(),sessionStorage:storage(),
-  document:{body:{classList:fakeClassList()},getElementById:element,querySelector:()=>fakeElement(),querySelectorAll:()=>[],createElement:()=>fakeElement()},
+  document:{body:{classList:fakeClassList()},getElementById:element,querySelector:()=>fakeElement(),querySelectorAll:()=>[],createElement:createdElement},
   setTimeout(){return 0;},clearTimeout(){},requestAnimationFrame(fn){return fn();},
   AudioContext:undefined,webkitAudioContext:undefined
 };
