@@ -51,9 +51,9 @@ function reset(){
   for(const suit of ['C','D','S','H'])for(const rank of ['2','3','4','5','6','7','8','9','10','J','Q','K','A']){
     const copies=deck.filter(card=>card.suit===suit&&card.rank===rank);
     assert.equal(copies.length,2,`${rank}${suit} must have two copies`);
-    assert.deepEqual(copies.map(card=>card.copy).sort(),[0,1]);
+    assert.equal(copies.map(card=>card.copy).sort().join(','),'0,1');
   }
-  assert.deepEqual([...PASS_CYCLE],[1,-1,2,-2,3,-3,4,0]);
+  assert.equal(Array.from(PASS_CYCLE).join(','),'1,-1,2,-2,3,-3,4,0');
 }
 
 {
