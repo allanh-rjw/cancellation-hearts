@@ -20,6 +20,8 @@ jobs:
           for file in app.js causal-loader.js domain-pack-client.js game-state-adapter.js domain-pack-integration.js; do
             node --check "$file"
           done
+      - name: Verify canonical game engine
+        run: node scripts/verify-game-engine-conformance.mjs
       - name: Verify production Domain Pack boundary
         run: node scripts/verify-domain-pack-integration.mjs
       - name: Verify retired trainer is not production-reachable
