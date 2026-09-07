@@ -4,6 +4,7 @@
   const penalty=card=>card.suit==='H'?1:(card.suit==='S'&&card.rank==='Q'?13:0);
   const cardId=card=>`card:${card.id}`;
   const publicCard=card=>({cardId:cardId(card),rank:card.rank,suit:card.suit,copyId:card.copy});
+  const canonicalStrategy=value=>({avoidance:'point-avoidance',targeting:'controlled-aggression',cancellation:'cancellation-oriented',soloMoon:'solo-moon',twoMoon:'two-player-moon'})[value]||value||null;
 
   function mode(){
     if(state.mode!=='practice') return 'standard';
@@ -26,7 +27,7 @@
     if(state.phase==='playing'&&state.currentPlayer===seat){
       try{ playable=legalCards(seat).some(candidate=>candidate.id===card.id); }catch(_error){}
     }
-    const passEligible=state.phase==='passing'&&seat===0;
+    const passEligible=state.phase==='passing';
     return {
       ...publicCard(card), playable, passEligible,
       selected:seat===0&&state.selected?.has(card.id)===true,
@@ -118,8 +119,8 @@
 
   function pivotHistory(){
     return (state.strategyPivots||[]).map(pivot=>({
-      from:pivot.from||state.originalStrategy||'point-avoidance',
-      to:pivot.to||pivot.strategy||state.coachStrategy||'point-avoidance',
+      from:canonicalStrategy(pivot.from||state.originalStrategy)||'point-avoidance',
+      to:canonicalStrategy(pivot.to||pivot.strategy||state.coachStrategy)||'point-avoidance',
       reason:pivot.reason||'Strategy changed from public game evidence.',
       handNumber:state.round
     }));
@@ -148,9 +149,9 @@
         trickPoints,carryoverPoints:state.carryoverPoints||0
       },
       publicHistory:{playedCards:played,knownVoids:knownVoids(),heartsBroken:!!state.heartsBroken,duplicateObservations:duplicateObservations(played),scoreIncentives:scoreIncentives()},
-      strategyContext:{selectedStrategy:state.coachStrategy||null,originalStrategy:state.originalStrategy||null,pivotHistory:pivotHistory(),practiceMode:practiceMode(),opponentEvidence:opponentEvidence()}
+      strategyContext:{selectedStrategy:canonicalStrategy(state.coachStrategy),originalStrategy:canonicalStrategy(state.originalStrategy),pivotHistory:pivotHistory(),practiceMode:practiceMode(),opponentEvidence:opponentEvidence()}
     };
   }
 
-  global.CancellationHeartsGameStateAdapter=Object.freeze({adapt,cardId,publicCard});
+  global.CancellationHeartsGameStateAdapter=Object.freeze({adapt,cardId,publicCard,canonicalStrategy});
 })(window);
