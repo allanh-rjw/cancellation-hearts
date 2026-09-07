@@ -33,7 +33,8 @@ for(const forbidden of ['hiddenOpponentCards','actualPersona','cpuTruth','evalua
   assert(!adapter.includes(forbidden),`learner-visible adapter contains forbidden field ${forbidden}`);
 }
 assert(adapter.includes('copyId:card.copy'),'physical duplicate identity must survive adaptation');
-assert(adapter.includes("state.showPersonas&&seatIndex!==0"),'persona truth may only cross the learner boundary when explicitly public');
+assert(adapter.includes('const isActingCpu=actorSeat!==0&&seatIndex===actorSeat'),'only the acting CPU may receive its private persona in its own policy view');
+assert(adapter.includes('const explicitlyPublic=state.showPersonas&&seatIndex!==0'),'learner state may include opponent persona only when the UI makes it public');
 
 assert(app.includes('const PASS_CYCLE = [1,-1,2,-2,3,-3,4,0]'),'canonical passing cycle changed');
 assert(app.includes('for(let i=0;i<104;i++) state.players[i%8].hand.push(deck[i])'),'two-deck, eight-player deal changed');
