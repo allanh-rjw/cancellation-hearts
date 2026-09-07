@@ -126,6 +126,12 @@
     }));
   }
 
+  function personaForActor(player,seatIndex,actorSeat){
+    const isActingCpu=actorSeat!==0&&seatIndex===actorSeat;
+    const explicitlyPublic=state.showPersonas&&seatIndex!==0;
+    return isActingCpu||explicitlyPublic?{persona:{label:player.persona,public:true}}:{};
+  }
+
   function adapt(seat=0){
     if(!state.players?.length) throw new Error('Cannot adapt Cancellation Hearts state before a game exists.');
     const hand=state.players[seat]?.hand||[];
@@ -137,7 +143,7 @@
       seatIndex,label:player.name,role:roleFor(seatIndex),visibleHandCardCount:player.hand.length,
       handScore:player.roundPoints||0,gameScore:player.score||0,dealer:seatIndex===state.dealer,
       activeTurn:state.phase==='playing'&&seatIndex===state.currentPlayer,
-      ...(state.showPersonas&&seatIndex!==0?{persona:{label:player.persona,public:true}}:{})
+      ...personaForActor(player,seatIndex,seat)
     }));
     return {
       schemaVersion:1,
