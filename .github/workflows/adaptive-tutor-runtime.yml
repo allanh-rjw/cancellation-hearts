@@ -1,4 +1,4 @@
-name: Adaptive Tutor Runtime
+name: Domain Pack Production Integration
 
 on:
   push:
@@ -6,53 +6,29 @@ on:
   pull_request:
 
 jobs:
-  verify-adaptive-tutor-runtime:
+  verify-domain-pack-production:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check runtime, assessment, and calibration module syntax
+      - name: Check production integration syntax
         shell: bash
         run: |
           set -euo pipefail
-          files=(
-            adaptive-trainer/contracts/contract-utils.js
-            adaptive-trainer/contracts/item-contracts.js
-            adaptive-trainer/contracts/evidence-contracts.js
-            adaptive-trainer/contracts/assessment-contracts.js
-            adaptive-trainer/contracts/calibration-contracts.js
-            adaptive-trainer/contracts/index.js
-            adaptive-trainer/contracts/runtime-contracts.js
-            adaptive-trainer/domain-adapter.js
-            adaptive-trainer/assessment-core.js
-            adaptive-trainer/calibration-core.js
-            adaptive-trainer/student-profile-rubric.js
-            adaptive-trainer/runtime/event-store.js
-            adaptive-trainer/runtime/evidence-ledger.js
-            adaptive-trainer/runtime/evidence-derivation.js
-            adaptive-trainer/runtime/learner-model-v1.js
-            adaptive-trainer/runtime/teaching-policy.js
-            adaptive-trainer/runtime/execution-pipeline.js
-            adaptive-trainer/hearts-domain-adapter.js
-            adaptive-trainer/hearts-assessment-integration.js
-            adaptive-trainer/hearts-calibration-integration.js
-            adaptive-trainer/hearts-browser-integration.js
-            hearts-response-completeness.js
-            hearts-reasoning-evidence.js
-            hearts-advanced-reasoning.js
-            hearts-passing-reasoning.js
-            tutor-passing-phase.js
-            tutor-diagnostic.js
-            tutor-progress-tab.js
-            tutor-level-progression.js
-            causal-loader.js
-          )
-          for file in "${files[@]}"; do
-            node --input-type=module --check < "$file"
+          for file in app.js causal-loader.js domain-pack-client.js game-state-adapter.js domain-pack-integration.js; do
+            node --check "$file"
           done
-      - name: Run Hearts Adaptive Trainer smoke test
-        run: node --experimental-default-type=module scripts/verify-adaptive-tutor-runtime.mjs
-      - name: Verify five-hand diagnostic through Assessment and Calibration Cores
-        run: node --experimental-default-type=module scripts/verify-tutor-diagnostic.mjs
+      - name: Verify canonical game engine
+        run: node scripts/verify-game-engine-conformance.mjs
+      - name: Verify production Domain Pack boundary
+        run: node scripts/verify-domain-pack-integration.mjs
+      - name: Verify Cloudflare Access identity boundary
+        run: node scripts/verify-identity-boundary.mjs
+      - name: Verify retired trainer is not production-reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eq 'hearts-tutor|adaptive-trainer/|causal/patch|eval\(' causal-loader.js
+          grep -q '__legacyCancellationHeartsTrainerProductionEnabled=false' causal-loader.js
