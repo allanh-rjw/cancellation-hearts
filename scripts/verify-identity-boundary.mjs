@@ -18,6 +18,7 @@ for(const field of ['learnerRef','accountId','email','roles','entitlements','ent
 assert(client.includes('identitySafeArgs(operation,args)'),'all evaluated decisions must pass through identity stripping');
 assert(client.includes("credentials:'include'"),'same-origin authenticated requests must include Cloudflare Access cookies');
 assert(client.includes("operation!=='evaluateDecision'"),'identity stripping must protect the evidence-producing request');
+assert(client.includes('/v1/domains/cancellation-hearts'),'app must use the external Domain Pack runtime boundary, never embedded ULS Hearts code');
 
 assert(app.includes('initializePasswordGate()'),'legacy gate may remain only as dormant migration/reference code');
 assert(app.includes('APP_PASSWORD'),'legacy password remains detectable so CI can prove it is not the production boundary');
