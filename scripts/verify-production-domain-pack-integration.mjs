@@ -6,7 +6,14 @@ import { resolve } from "node:path";
 const root=process.env.CANCELLATION_HEARTS_DOMAIN_ROOT;
 if(!root)throw new Error("CANCELLATION_HEARTS_DOMAIN_ROOT must point to a built production Domain Pack checkout");
 const domain=await import(pathToFileURL(resolve(root,"dist/index.js")).href);
-const {createCancellationHeartsTrainer}=domain;
+const {
+  createCancellationHeartsTrainer,
+  cancellationHeartsRules,
+  firstSeatLeftOfDealer,
+  mayLeadHearts,
+  passOffsetForHand,
+  resolveCancellationTrick
+}=domain;
 assert.equal(typeof createCancellationHeartsTrainer,"function");
 
 const appSource=readFileSync(new URL("../app.js",import.meta.url),"utf8");
@@ -22,8 +29,57 @@ for(const signature of [
   "partnerIndex:null",
   "actionLog:[]"
 ])assert.ok(appSource.includes(signature),`real app state signature changed: ${signature}`);
-for(const signature of ["function legalCards(playerIndex)","function currentTrickStatus()","function renderCoach()"])
-  assert.ok(appSource.includes(signature),`real app boundary changed: ${signature}`);
+for(const signature of [
+  "function legalCards(playerIndex)",
+  "function currentTrickStatus()",
+  "function renderCoach()",
+  "function startFirstTrick()",
+  "function updateCancellation()",
+  "state.leader=(state.dealer+1)%8;",
+  "state.openingAutoPlayers.add(i);",
+  "while(state.openingAutoPlayers.has(state.currentPlayer)) state.currentPlayer=(state.currentPlayer+1)%8;",
+  "if(card.suit==='H' && currentLedSuit()) state.heartsBroken=true;",
+  "state.carryoverPoints+=trickPoints;"
+])assert.ok(appSource.includes(signature),`real app rule boundary changed: ${signature}`);
+
+// Canonical rule edge cases are executed by the Domain Pack while the source
+// signatures above prove the real app still exposes the corresponding game
+// execution seams. The harness contains no second rules implementation.
+assert.equal(cancellationHeartsRules.deckCount,2);
+assert.equal(cancellationHeartsRules.playerCount,8);
+assert.equal(cancellationHeartsRules.queenOfSpadesPoints,13);
+assert.equal(cancellationHeartsRules.openingLead,"player-left-of-dealer-with-both-two-of-clubs-preplayed");
+assert.deepEqual(Array.from({length:8},(_,i)=>passOffsetForHand(i)),[1,-1,2,-2,3,-3,4,0]);
+assert.equal(firstSeatLeftOfDealer(7),0);
+assert.equal(firstSeatLeftOfDealer(3),4);
+assert.equal(mayLeadHearts([{suit:"C"}],false),false);
+assert.equal(mayLeadHearts([{suit:"C"}],true),true);
+assert.equal(mayLeadHearts([{suit:"H"},{suit:"H"}],false),true);
+
+const doubleTwoOpening=resolveCancellationTrick([
+  {seat:2,card:{code:"2C",rank:"2",suit:"C"}},
+  {seat:5,card:{code:"2C",rank:"2",suit:"C"}},
+  {seat:0,card:{code:"8C",rank:"8",suit:"C"}}
+]);
+assert.deepEqual(doubleTwoOpening.cancelledCodes,["2C"]);
+assert.equal(doubleTwoOpening.winnerSeat,0);
+
+const noWinnerCarry=resolveCancellationTrick([
+  {seat:2,card:{code:"2C",rank:"2",suit:"C"}},
+  {seat:5,card:{code:"2C",rank:"2",suit:"C"}},
+  {seat:0,card:{code:"QS",rank:"Q",suit:"S"}}
+],4);
+assert.equal(noWinnerCarry.winnerSeat,null);
+assert.equal(noWinnerCarry.awardedPoints,0);
+assert.equal(noWinnerCarry.carriedPoints,17);
+
+const ordinaryLoadedTrick=resolveCancellationTrick([
+  {seat:0,card:{code:"7D",rank:"7",suit:"D"}},
+  {seat:1,card:{code:"KD",rank:"K",suit:"D"}},
+  {seat:2,card:{code:"QS",rank:"Q",suit:"S"}}
+],4);
+assert.equal(ordinaryLoadedTrick.winnerSeat,1);
+assert.equal(ordinaryLoadedTrick.awardedPoints,17);
 
 const card=(rank,suit,id=`${rank}${suit}-a`)=>({id,rank,suit});
 const learnerHand=[card("2","C"),card("5","C"),card("Q","C"),card("6","D"),card("10","D"),card("K","D"),card("2","S"),card("9","S"),card("Q","S"),card("6","H"),card("7","H"),card("10","H"),card("Q","H")];
@@ -108,6 +164,10 @@ const activityB=trainer.nextActivity("cancellation-hearts.strategy.pivot","app-h
 assert.deepEqual(activityA,activityB);
 assert.equal(activityA.familyId,"strategy-pivot");
 assert.equal(activityA.generatedState.gameState.learnerHand.length,13);
+const safeExit=trainer.nextActivity("cancellation-hearts.tactics.safe-exit","safe-exit-seed");
+const leadControl=trainer.nextActivity("cancellation-hearts.tactics.lead-control","lead-control-seed");
+assert.equal(safeExit.familyId,"safe-exit");
+assert.equal(leadControl.familyId,"lead-control");
 
 for(const required of ["assessHand","recommendStrategy","rejectedStrategies","recommendPassing","recommendPlay","detectPivot","moonDefense","analyzeOpponents","postHand","postGame","replay","nextActivity"])
   assert.equal(typeof trainer[required],"function",`missing production trainer surface ${required}`);
