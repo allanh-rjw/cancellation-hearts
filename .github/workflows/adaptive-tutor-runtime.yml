@@ -24,6 +24,8 @@ jobs:
         run: node scripts/verify-game-engine-conformance.mjs
       - name: Verify production Domain Pack boundary
         run: node scripts/verify-domain-pack-integration.mjs
+      - name: Verify Cloudflare Access identity boundary
+        run: node scripts/verify-identity-boundary.mjs
       - name: Verify retired trainer is not production-reachable
         shell: bash
         run: |
