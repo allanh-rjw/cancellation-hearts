@@ -12,10 +12,17 @@
     if(document.querySelector(`link[href="${href}"]`))return;
     const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.appendChild(link);
   }
+  function installCloudflareAccessBoundary(){
+    window.__cancellationHeartsIdentityBoundary='cloudflare-access';
+    document.body.classList.remove('locked');
+    document.getElementById('passwordGate')?.classList.add('hidden');
+    document.getElementById('app')?.setAttribute('aria-hidden','false');
+  }
 
   window.__adaptiveTutorLoaded=false;
   window.__causalPlannerLoaded=false;
   window.__legacyCancellationHeartsTrainerProductionEnabled=false;
+  installCloudflareAccessBoundary();
 
   try{
     loadStyle('domain-pack-integration.css');
