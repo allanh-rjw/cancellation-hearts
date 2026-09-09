@@ -1,0 +1,256 @@
+name: Apply Centralized Access Alignment
+
+on:
+  push:
+    branches: [integration/centralized-access-alignment]
+    paths:
+      - .github/workflows/access-alignment-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/centralized-access-alignment
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply access alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          app_path = Path('app.js')
+          app = app_path.read_text()
+          marker = "const SUITS = ['C','D','S','H'];"
+          if not app.startswith('// Client-side access gate.') or marker not in app:
+              raise SystemExit('Password-gate source signature changed')
+          app = app[app.index(marker):]
+          forbidden = ['APP_PASSWORD', 'initializePasswordGate', 'cancellationHeartsUnlocked', 'passwordGate', 'passwordForm', 'appPassword']
+          if any(token in app for token in forbidden):
+              raise SystemExit('Password-gate source remains after removal')
+          app_path.write_text(app)
+
+          index_path = Path('index.html')
+          html = index_path.read_text()
+          html = html.replace('<body class="locked">', '<body>', 1)
+          gate_start = html.find('<div id="passwordGate"')
+          app_marker = '<div id="app" aria-hidden="true">'
+          app_start = html.find(app_marker)
+          if gate_start < 0 or app_start < 0 or app_start <= gate_start:
+              raise SystemExit('Password-gate DOM signature changed')
+          html = html[:gate_start] + '<div id="app">' + html[app_start + len(app_marker):]
+          for token in ['passwordGate', 'passwordForm', 'appPassword', 'togglePasswordBtn', 'passwordError', 'class="locked"']:
+              if token in html:
+                  raise SystemExit(f'Obsolete password DOM remains: {token}')
+          index_path.write_text(html)
+
+          style_path = Path('style.css')
+          css = style_path.read_text()
+          import re
+          password_tokens = [
+              'body.locked', '.password-gate', '.password-card', '.password-mark',
+              '.password-input-row', '.password-submit', '.password-error'
+          ]
+          for token in password_tokens:
+              escaped = re.escape(token)
+              css = re.sub(r'[^{}]*' + escaped + r'[^{}]*\{[^{}]*\}', '', css)
+          if any(token in css for token in password_tokens):
+              raise SystemExit('Password-specific CSS remains and needs a narrower cleanup')
+          style_path.write_text(css)
+
+          workflow_path = Path('.github/workflows/adaptive-tutor-runtime.yml')
+          workflow = workflow_path.read_text()
+          if '            app.js\n' not in workflow:
+              workflow = workflow.replace('          files=(\n', '          files=(\n            app.js\n', 1)
+          startup_step = '''      - name: Verify browser startup without app-local password\n        run: node scripts/verify-browser-startup.mjs\n'''
+          if startup_step not in workflow:
+              anchor = '      - name: Verify legacy/gateway semantic parity harness\n        run: node scripts/verify-learning-gateway-parity.mjs\n'
+              if anchor not in workflow:
+                  raise SystemExit('CI parity anchor changed')
+              workflow = workflow.replace(anchor, anchor + startup_step, 1)
+          workflow_path.write_text(workflow)
+          PY
+
+          cat > scripts/verify-browser-startup.mjs <<'NODE'
+          import { createServer } from 'node:http';
+          import { spawn, spawnSync } from 'node:child_process';
+          import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+          import { tmpdir } from 'node:os';
+          import { extname, join, normalize } from 'node:path';
+          import { once } from 'node:events';
+          import net from 'node:net';
+
+          const root = process.cwd();
+          const mime = new Map([
+            ['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],
+            ['.mjs','text/javascript; charset=utf-8'],['.css','text/css; charset=utf-8'],
+            ['.json','application/json; charset=utf-8']
+          ]);
+
+          function freePort(){
+            return new Promise((resolve,reject)=>{
+              const s=net.createServer();
+              s.once('error',reject);s.listen(0,'127.0.0.1',()=>{
+                const port=s.address().port;s.close(()=>resolve(port));
+              });
+            });
+          }
+          function chromeBinary(){
+            const candidates=[process.env.CHROME_BIN,'google-chrome-stable','google-chrome','chromium','chromium-browser'].filter(Boolean);
+            return candidates.find(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0)
+              ?? (()=>{throw new Error('Chrome/Chromium is required for browser startup verification');})();
+          }
+          function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+          async function waitForDebug(port){
+            for(let i=0;i<60;i++){
+              try{const r=await fetch(`http://127.0.0.1:${port}/json/version`);if(r.ok)return;}catch{}
+              await sleep(100);
+            }
+            throw new Error('Chrome DevTools endpoint did not start');
+          }
+          async function openTarget(port){
+            const r=await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'});
+            if(!r.ok)throw new Error(`Unable to create Chrome target (${r.status})`);
+            return r.json();
+          }
+          async function inspectMode(port,baseUrl,mode){
+            const target=await openTarget(port);
+            const ws=new WebSocket(target.webSocketDebuggerUrl);
+            await once(ws,'open');
+            let nextId=0;
+            const pending=new Map();
+            const exceptions=[];
+            ws.addEventListener('message',event=>{
+              const msg=JSON.parse(String(event.data));
+              if(msg.id&&pending.has(msg.id)){
+                const {resolve,reject}=pending.get(msg.id);pending.delete(msg.id);
+                if(msg.error)reject(new Error(msg.error.message));else resolve(msg.result);
+              }else if(msg.method==='Runtime.exceptionThrown'){
+                exceptions.push(msg.params?.exceptionDetails?.text ?? 'uncaught browser exception');
+              }
+            });
+            const send=(method,params={})=>new Promise((resolve,reject)=>{
+              const id=++nextId;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));
+            });
+            await send('Runtime.enable');
+            await send('Page.enable');
+            await send('Page.navigate',{url:`${baseUrl}/?learningMode=${mode}`});
+            let snapshot=null;
+            for(let i=0;i<80;i++){
+              await sleep(100);
+              const result=await send('Runtime.evaluate',{
+                expression:`JSON.stringify({ready:document.readyState,setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,gateway:window.__cancellationHeartsLearningGateway??null,runtime:window.CancellationHeartsLearningRuntime?.status?.()??null})`,
+                returnByValue:true
+              });
+              const value=result?.result?.value;
+              if(value){snapshot=JSON.parse(value);if(snapshot.ready==='complete'&&snapshot.runtime)break;}
+            }
+            ws.close();
+            if(!snapshot?.setup||snapshot.setupHidden)throw new Error(`${mode}: setup screen did not initialize`);
+            if(snapshot.passwordGate)throw new Error(`${mode}: obsolete password gate is still present`);
+            if(snapshot.appHidden==='true')throw new Error(`${mode}: application remains aria-hidden`);
+            if(snapshot.gateway?.status==='initialization-failed')throw new Error(`${mode}: Learning Gateway bootstrap failed`);
+            if(snapshot.gateway?.defaultMode!=='legacy')throw new Error(`${mode}: production default drifted from legacy`);
+            if(snapshot.runtime?.mode!==mode)throw new Error(`${mode}: requested migration mode did not initialize`);
+            if(exceptions.length)throw new Error(`${mode}: uncaught browser exception: ${exceptions.join(' | ')}`);
+            return snapshot;
+          }
+
+          const server=createServer((req,res)=>{
+            try{
+              const requested=new URL(req.url,'http://localhost').pathname;
+              const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));
+              const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');
+              const file=join(root,clean);
+              if(!statSync(file).isFile())throw new Error('not file');
+              res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});
+              res.end(readFileSync(file));
+            }catch{res.writeHead(404);res.end('not found');}
+          });
+          server.listen(0,'127.0.0.1');
+          await once(server,'listening');
+          const appPort=server.address().port;
+          const debugPort=await freePort();
+          const profile=mkdtempSync(join(tmpdir(),'hearts-browser-startup-'));
+          const chrome=spawn(chromeBinary(),[
+            '--headless=new','--no-sandbox','--disable-gpu',`--remote-debugging-port=${debugPort}`,
+            `--user-data-dir=${profile}`,'about:blank'
+          ],{stdio:['ignore','ignore','pipe']});
+          let chromeError='';chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
+          try{
+            await waitForDebug(debugPort);
+            const baseUrl=`http://127.0.0.1:${appPort}`;
+            for(const mode of ['legacy','parity'])await inspectMode(debugPort,baseUrl,mode);
+            console.log('browser-startup: legacy + parity OK; no app-local password gate');
+          }finally{
+            chrome.kill('SIGTERM');server.close();rmSync(profile,{recursive:true,force:true});
+          }
+          if(chrome.exitCode&&chrome.exitCode!==0)throw new Error(chromeError.slice(-1000));
+          NODE
+
+          cat > docs/DSS_ACCESS_MODEL.md <<'DOC'
+          # Distant Star Systems access model
+
+          Distant Star Systems owns identity and access administration centrally. Domain Applications remain independently deployed, but they do not own separate user stores or approval systems.
+
+          ## Ownership
+
+          - `distantstarsystems.ai`: central access-request, invitation, approval, entitlement, expiration, and revocation administration.
+          - `hearts.distantstarsystems.ai`: Cancellation Hearts application; Cloudflare Access enforces admission at the application edge.
+          - `ochem.distantstarsystems.ai`: Organic Chemistry application; separately enforced at its application edge.
+          - ULS: canonical DSS account identity and entitlement authority across applications.
+
+          Cloudflare Access answers whether a verified identity may reach an application. ULS answers which DSS products that canonical account is entitled to use. OTP verifies identity only; successful OTP authentication is not, by itself, authorization.
+
+          ## Cancellation Hearts admission
+
+          `hearts.distantstarsystems.ai` must use a Cloudflare Access policy limited to an explicitly approved identity population. A reusable group/list such as `DSS Cancellation Hearts Approved Users` may hold approved email addresses. The policy must not allow every identity merely because One-time PIN succeeded.
+
+          After Cloudflare admits a verified email, the ULS Learning Gateway resolves the canonical account from the Cloudflare identity and requires the `app:cancellation-hearts` entitlement. Browser-supplied account or learner identifiers are never authoritative.
+
+          ## Provisioning
+
+          Both entry paths converge on the same provisioning service:
+
+          1. Request Access -> operator approval -> approved Cloudflare identity + pending ULS access -> invitation.
+          2. Direct Invite -> approved Cloudflare identity + pending ULS access -> invitation.
+
+          Pending ULS access is keyed to the normalized verified email. On first authenticated gateway use, the existing Cloudflare-email claim path attaches that pending access to the canonical ULS account.
+
+          Access-source semantics remain `trial`, `subscription`, and `grant`. Product rights remain entitlement-based and support single-app, bundle, and all-app plans.
+
+          ## Revocation
+
+          Complete revocation has two layers:
+
+          1. Remove the identity from the applicable Cloudflare approved population so future application admission fails.
+          2. Revoke the ULS access source so the canonical account no longer has product rights.
+
+          Existing Cloudflare sessions may remain valid until their configured session expiration; ULS entitlement enforcement remains an independent fail-closed boundary.
+
+          ## Application rule
+
+          Domain Applications must not add app-local shared passwords, duplicate ULS entitlements, or maintain application-specific user databases. Cancellation Hearts therefore relies on Cloudflare Access plus ULS and has no secondary password gate.
+          DOC
+
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/adaptive-tutor-runtime.yml')
+          text=p.read_text()
+          if 'Verify browser startup without app-local password' not in text:
+              raise SystemExit('Startup CI step was not installed')
+          p.write_text(text)
+          PY
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app.js index.html style.css scripts/verify-browser-startup.mjs docs/DSS_ACCESS_MODEL.md .github/workflows/adaptive-tutor-runtime.yml
+          git commit -m "Align Cancellation Hearts with centralized DSS access"
+          git push origin HEAD:integration/centralized-access-alignment
