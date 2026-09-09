@@ -99,18 +99,6 @@ dialog{width:min(760px,94vw);border:1px solid var(--panel-border);border-radius:
   .hand .card{flex:0 1 54px;min-width:38px;aspect-ratio:5/7;height:auto}
 }
 
-/* Lightweight client-side password gate. This keeps casual visitors out, but
-   the password is still part of the downloaded app and is not true server-side security. */
-body.locked{overflow:hidden}
-body.locked #app{display:none}
-.password-gate{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at top,#124c3d,#071c18 62%)}
-.password-gate.hidden{display:none}
-.password-card{width:min(440px,100%);padding:30px;border:1px solid rgba(255,255,255,.18);border-radius:22px;background:rgba(7,28,24,.96);box-shadow:0 24px 80px rgba(0,0,0,.45)}
-.password-card h1{margin:4px 0 8px}.password-card p{color:var(--muted);line-height:1.45}.password-card label{display:block;margin:22px 0 8px;font-weight:700}
-.password-mark{font-size:3rem;color:var(--danger);line-height:1}
-.password-input-row{display:grid;grid-template-columns:1fr auto;gap:8px}.password-input-row input{min-width:0;padding:12px 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:#fff;color:#13211d;font:inherit}
-.password-submit{width:100%;margin-top:14px;padding:12px}.password-error{min-height:1.4em;margin:10px 0 0!important;color:#ff9b9b!important;font-weight:700}
-
 
 /* Live strategy-pivot coaching */
 .pivot-alert{margin:0 0 14px;padding:14px;border:1px solid rgba(255,190,80,.7);border-radius:12px;background:rgba(109,67,8,.28)}
