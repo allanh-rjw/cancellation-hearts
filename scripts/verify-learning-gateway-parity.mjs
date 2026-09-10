@@ -28,8 +28,11 @@ for(const signature of [
 ])assert.ok(appSource.includes(signature),`real app learning seam changed: ${signature}`);
 
 for(const signature of [
+  "const DEFAULT_MODE='gateway'",
   "modes:['legacy','gateway','parity']",
-  "defaultMode:'legacy'",
+  "defaultMode:DEFAULT_MODE",
+  "if(runtime.mode==='legacy')",
+  "if(runtime.mode==='parity')",
   "learnerVisibleOnly:true",
   "serviceCredentialsInBrowser:false",
   "api.adaptLearnerVisibleState(state)",
@@ -134,4 +137,4 @@ parity["assess-hand"]={...parity["assess-hand"],equal:true,knownDifference:"expl
 
 for(const [operation,result] of Object.entries(parity))assert.equal(result.equal,true,`${operation} semantic parity failed: ${JSON.stringify(result)}`);
 
-console.log(`learning-gateway-parity: OK (${Object.keys(parity).length} operations; assessment wording normalized)`);
+console.log(`learning-gateway-parity: OK (${Object.keys(parity).length} operations; Gateway default with explicit legacy parity oracle retained)`);

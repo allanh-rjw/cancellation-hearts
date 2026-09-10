@@ -28,29 +28,30 @@ async function browserSession(port,label){
   return{ws,exceptions,send,evaluate};
 }
 async function waitFor(evaluate,expression,label,{tries=100,delay=100}={}){for(let i=0;i<tries;i++){const value=await evaluate(expression);if(value)return value;await sleep(delay);}throw new Error(`${label}: condition did not become ready`);}
-async function inspectOrdinaryMode(port,baseUrl,mode){
-  const {ws,exceptions,send,evaluate}=await browserSession(port,mode);
-  await send('Page.navigate',{url:`${baseUrl}/?learningMode=${mode}`});
-  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r)return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${mode} startup`);
+async function inspectOrdinaryMode(port,baseUrl,{label,path,expectedMode}){
+  const {ws,exceptions,send,evaluate}=await browserSession(port,label);
+  await send('Page.navigate',{url:`${baseUrl}/${path}`});
+  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r)return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${label} startup`);
   const snapshot=JSON.parse(raw);
-  if(!snapshot.setup||snapshot.setupHidden)throw new Error(`${mode}: setup screen did not initialize`);
-  if(snapshot.passwordGate)throw new Error(`${mode}: obsolete password gate is still present`);
-  if(snapshot.appHidden==='true')throw new Error(`${mode}: application remains aria-hidden`);
-  if(snapshot.gateway?.status==='initialization-failed')throw new Error(`${mode}: Learning Gateway bootstrap failed`);
-  if(snapshot.gateway?.defaultMode!=='legacy')throw new Error(`${mode}: production default drifted from legacy`);
-  if(snapshot.runtime?.mode!==mode)throw new Error(`${mode}: requested migration mode did not initialize`);
-  if(exceptions.length)throw new Error(`${mode}: uncaught browser exception before game start: ${exceptions.join(' | ')}`);
+  if(!snapshot.setup||snapshot.setupHidden)throw new Error(`${label}: setup screen did not initialize`);
+  if(snapshot.passwordGate)throw new Error(`${label}: obsolete password gate is still present`);
+  if(snapshot.appHidden==='true')throw new Error(`${label}: application remains aria-hidden`);
+  if(snapshot.gateway?.status==='initialization-failed')throw new Error(`${label}: Learning Gateway bootstrap failed`);
+  if(snapshot.gateway?.defaultMode!=='gateway')throw new Error(`${label}: production default is not gateway`);
+  if(snapshot.runtime?.mode!==expectedMode)throw new Error(`${label}: expected ${expectedMode}, received ${snapshot.runtime?.mode}`);
+  if(exceptions.length)throw new Error(`${label}: uncaught browser exception before game start: ${exceptions.join(' | ')}`);
   await evaluate(`document.getElementById('newGameBtn').click()`);
   await sleep(3200);
-  const started=JSON.parse(await evaluate(`JSON.stringify({setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,gameHidden:document.getElementById('game')?.classList.contains('hidden')??null,players:typeof state!=='undefined'?state.players?.length:null,phase:typeof state!=='undefined'?state.phase:null,causal:window.__causalPlannerLoaded??null,tutorLoaded:window.__adaptiveTutorLoaded??null,tutorInitialized:window.CancellationHeartsTutor?.isInitialized?.()??null,coreCount:window.CancellationHeartsTutor?.coreConstructionCount?.()??null})`));
-  if(started.setupHidden!==true)throw new Error(`${mode}: setup remained visible after Start New Game`);
-  if(started.gameHidden!==false)throw new Error(`${mode}: game did not remain visible after Start New Game`);
-  if(started.players!==8)throw new Error(`${mode}: game did not initialize eight players`);
-  if(!['passing','playing'].includes(started.phase))throw new Error(`${mode}: unexpected post-start phase ${started.phase}`);
-  if(started.tutorLoaded!==true)throw new Error(`${mode}: Tutor capability did not finish loading during post-start window`);
-  if(started.tutorInitialized!==false||started.coreCount!==0)throw new Error(`${mode}: ordinary game startup initialized Tutor core`);
-  if(exceptions.length)throw new Error(`${mode}: uncaught browser exception after game start: ${exceptions.join(' | ')}`);
-  console.log(`${mode}: ordinary Start New Game stable; phase=${started.phase}; Tutor core count=0`);ws.close();
+  const started=JSON.parse(await evaluate(`JSON.stringify({setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,gameHidden:document.getElementById('game')?.classList.contains('hidden')??null,players:typeof state!=='undefined'?state.players?.length:null,phase:typeof state!=='undefined'?state.phase:null,causal:window.__causalPlannerLoaded??null,tutorLoaded:window.__adaptiveTutorLoaded??null,tutorInitialized:window.CancellationHeartsTutor?.isInitialized?.()??null,coreCount:window.CancellationHeartsTutor?.coreConstructionCount?.()??null,runtime:window.CancellationHeartsLearningRuntime?.status?.()??null})`));
+  if(started.setupHidden!==true)throw new Error(`${label}: setup remained visible after Start New Game`);
+  if(started.gameHidden!==false)throw new Error(`${label}: game did not remain visible after Start New Game`);
+  if(started.players!==8)throw new Error(`${label}: game did not initialize eight players`);
+  if(!['passing','playing'].includes(started.phase))throw new Error(`${label}: unexpected post-start phase ${started.phase}`);
+  if(started.runtime?.mode!==expectedMode)throw new Error(`${label}: runtime changed mode after Start New Game`);
+  if(started.tutorLoaded!==true)throw new Error(`${label}: Tutor capability did not finish loading during post-start window`);
+  if(started.tutorInitialized!==false||started.coreCount!==0)throw new Error(`${label}: ordinary game startup initialized Tutor core`);
+  if(exceptions.length)throw new Error(`${label}: uncaught browser exception after game start: ${exceptions.join(' | ')}`);
+  console.log(`${label}: ${expectedMode} Start New Game stable; phase=${started.phase}; Tutor core count=0`);ws.close();
 }
 async function inspectTutorMode(port,baseUrl){
   const label='tutor';const {ws,exceptions,send,evaluate}=await browserSession(port,label);
@@ -71,6 +72,17 @@ async function inspectTutorMode(port,baseUrl){
   if(exceptions.length)throw new Error(`tutor: uncaught browser exception: ${exceptions.join(' | ')}`);
   console.log('tutor: real user entry initialized one core, opened diagnostic, repeated start remained idempotent');ws.close();
 }
-const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({code:'authorization-denied'}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
+const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
 server.listen(0,'127.0.0.1');await once(server,'listening');const appPort=server.address().port;const profile=mkdtempSync(join(tmpdir(),'hearts-browser-startup-'));let chromeError='';const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
-try{const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const baseUrl=`http://127.0.0.1:${appPort}`;for(const mode of ['legacy','parity'])await inspectOrdinaryMode(debugPort,baseUrl,mode);await inspectTutorMode(debugPort,baseUrl);console.log('browser-startup: legacy + parity ordinary gameplay stable; Tutor core is lazy and single-construction');}finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
+try{
+  const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const baseUrl=`http://127.0.0.1:${appPort}`;
+  const cases=[
+    {label:'default',path:'',expectedMode:'gateway'},
+    {label:'legacy-override',path:'?learningMode=legacy',expectedMode:'legacy'},
+    {label:'parity-override',path:'?learningMode=parity',expectedMode:'parity'},
+    {label:'gateway-override',path:'?learningMode=gateway',expectedMode:'gateway'}
+  ];
+  for(const item of cases)await inspectOrdinaryMode(debugPort,baseUrl,item);
+  await inspectTutorMode(debugPort,baseUrl);
+  console.log('browser-startup: plain URL defaults to gateway; legacy/parity/gateway overrides stable; Tutor remains lazy and single-construction');
+}finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}

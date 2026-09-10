@@ -63,7 +63,7 @@ jobs:
         run: node scripts/verify-learning-gateway-client.mjs
       - name: Verify legacy/gateway semantic parity harness
         run: node scripts/verify-learning-gateway-parity.mjs
-      - name: Verify parity browser dispatches Gateway requests
+      - name: Verify Gateway-default and parity browser dispatch
         run: node scripts/verify-parity-dispatch.mjs
-      - name: Verify browser startup, post-start stability, and lazy Tutor initialization
+      - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization
         run: node scripts/verify-browser-startup.mjs
