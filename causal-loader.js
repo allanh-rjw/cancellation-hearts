@@ -14,6 +14,9 @@
     const response=await fetch('hearts-tutor.js',{cache:'no-store'});
     if(!response.ok) throw new Error('Unable to load hearts-tutor.js');
     let code=await response.text();
+    const originalCore="const core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);";
+    if(!code.includes(originalCore)) throw new Error('Tutor core-construction probe guard failed');
+    code=code.replace(originalCore,"const core={profile:{},state:{}};");
     const originalSteps="const steps=[\n    {id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}\n  ];";
     const replacementSteps="const baseSteps=[{id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}]; const developingSteps=[{id:'threat',label:'6. Threats'},{id:'pivot',label:'7. Contingency / pivot'}]; const advancedSteps=[{id:'observe',label:'8. What to watch for'},{id:'target',label:'9. Smart targeting'}]; let steps=[...baseSteps]; function stepsForLevel(){const level=core.profile.selfLevel||'beginner';if(level==='developing')return [...baseSteps,...developingSteps];if(level==='advanced'||level==='expert')return [...baseSteps,...developingSteps,...advancedSteps];return [...baseSteps];}";
     if(!code.includes(originalSteps)) throw new Error('Tutor ME20 integration guard failed: steps signature changed');
@@ -70,13 +73,9 @@
     await import('./adaptive-trainer/hearts-calibration-integration.js');
     await loadScript('tutor-passing-phase.js');
     await loadScript('tutor-diagnostic.js');
-    window.__tutorUiLoadDeferred=true;
-    await loadScript('tutor-strategy-orientation.js');
-    await loadScript('tutor-situational-coaching.js');
-    await loadScript('tutor-level-progression.js');
-    await loadScript('tutor-progress-tab.js');
+    await loadAsyncTutorUI();
     window.__adaptiveTutorLoaded=true;
-    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing';
+    window.__adaptiveTutorArchitecture='constructor-probe';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
