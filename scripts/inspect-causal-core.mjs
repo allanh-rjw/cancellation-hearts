@@ -6,11 +6,4 @@ const encoded=['patch.part01','patch.part02','patch.part03']
   .join('');
 const source=gunzipSync(Buffer.from(encoded,'base64')).toString('utf8');
 console.log(`CAUSAL_PATCH_SIZE:${source.length}`);
-for(const needle of ['AdaptiveCoachCore','AdaptiveCoach','CoachCore','class ']){
-  let index=source.indexOf(needle);
-  while(index>=0){
-    console.log(`CAUSAL_SNIPPET:${needle}\n${source.slice(Math.max(0,index-600),index+3000)}\nEND_CAUSAL_SNIPPET`);
-    index=source.indexOf(needle,index+needle.length);
-    if(needle==='class ')break;
-  }
-}
+console.log(`CAUSAL_PATCH_HEAD\n${source.slice(0,12000)}\nEND_CAUSAL_PATCH_HEAD`);
