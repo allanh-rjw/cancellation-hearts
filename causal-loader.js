@@ -70,7 +70,7 @@
     await import('./adaptive-trainer/hearts-calibration-integration.js');
     await loadScript('tutor-passing-phase.js');
     await loadScript('tutor-diagnostic.js');
-    await loadAsyncTutorUI();
+    window.__tutorUiLoadDeferred=true;
     await loadScript('tutor-strategy-orientation.js');
     await loadScript('tutor-situational-coaching.js');
     await loadScript('tutor-level-progression.js');
