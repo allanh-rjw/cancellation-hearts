@@ -33,7 +33,7 @@
     if(!response.ok) throw new Error('Unable to load hearts-tutor.js');
     let code=await response.text();
     const originalCore="const core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);";
-    const lazyCore="let core=null;let coreConstructionCount=0;function ensureInitialized(){if(core)return core;core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);coreConstructionCount++;return core;}";
+    const lazyCore="let core=null;let coreConstructionCount=0;function ensureInitialized(){if(core)return core;core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);coreConstructionCount++;window.__CancellationHeartsTutorExtensions?.install?.();return core;}";
     if(!code.includes(originalCore)) throw new Error('Tutor lazy-core integration guard failed: core signature changed');
     code=code.replace(originalCore,lazyCore);
     const originalStartFunction="function startTutor(){";
@@ -109,7 +109,7 @@
     ]);
     await loadAsyncTutorUI();
     window.__adaptiveTutorLoaded=true;
-    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing/lazy-tutor-core-constructor-isolation';
+    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing/lazy-tutor-core-v1';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
