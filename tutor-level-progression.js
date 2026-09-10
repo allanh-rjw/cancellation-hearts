@@ -62,12 +62,11 @@
   function renderProgress(){
     const root=document.getElementById('tutorRoot'),top=root?.querySelector('.tutor-top');if(!top)return;
     let box=document.getElementById('tutorLevelProgress');if(!box){box=document.createElement('div');box.id='tutorLevelProgress';box.className='tutor-level-progress';top.appendChild(box);}
-    const s=resolveRating();
-    if(s.scope==='diagnostic'){box.innerHTML='<strong>Diagnostic in progress</strong><span>Complete all five test hands to establish your starting level.</span>';return;}
-    if(!s.level){const missing=s.missing.length?s.missing.join(', '):'additional evidence';box.innerHTML=`<strong>${s.performanceLabel}</strong><span>Assessment uses understanding, consistency, independence, and transfer.</span><small>Still gathering: ${missing}.</small>`;return;}
-    const bar=Number.isFinite(s.barPercent)?`<div class="tutor-rating-bar"><span style="width:${s.barPercent}%"></span></div>`:'';
-    const note=s.scope==='developing-evidence-needed'?'Passing, pathway revision, threat recognition, and minimum-intervention evidence are still being gathered before the trainer can support an Advanced rating.':s.scope==='advanced-evidence-needed'?'Observation and targeting evidence is still being gathered before the trainer can support an Expert rating.':'Rating is based on understanding, consistency, independence, and transfer.';
-    box.innerHTML=`<strong>${s.performanceLabel}</strong>${bar}<span>${note}</span>`;
+    const s=resolveRating();let html='';
+    if(s.scope==='diagnostic')html='<strong>Diagnostic in progress</strong><span>Complete all five test hands to establish your starting level.</span>';
+    else if(!s.level){const missing=s.missing.length?s.missing.join(', '):'additional evidence';html=`<strong>${s.performanceLabel}</strong><span>Assessment uses understanding, consistency, independence, and transfer.</span><small>Still gathering: ${missing}.</small>`;}
+    else{const bar=Number.isFinite(s.barPercent)?`<div class="tutor-rating-bar"><span style="width:${s.barPercent}%"></span></div>`:'';const note=s.scope==='developing-evidence-needed'?'Passing, pathway revision, threat recognition, and minimum-intervention evidence are still being gathered before the trainer can support an Advanced rating.':s.scope==='advanced-evidence-needed'?'Observation and targeting evidence is still being gathered before the trainer can support an Expert rating.':'Rating is based on understanding, consistency, independence, and transfer.';html=`<strong>${s.performanceLabel}</strong>${bar}<span>${note}</span>`;}
+    if(box.innerHTML!==html)box.innerHTML=html;
   }
   function showRatingChange(){
     if(core.state.diagnostic&&!core.state.diagnostic.completed)return;
@@ -76,6 +75,14 @@
     card.innerHTML=`<div class="eyebrow">Assessment update</div><h3>${LABELS[p.to]}</h3><p>${upward?'Your recent evidence now supports a higher teaching level.':'The trainer is temporarily adjusting the teaching level while it gathers stronger evidence.'} The next hand will use the matching pathway.</p>`;
     body.prepend(card);p.shown=true;persist();
   }
-  const observer=new MutationObserver(()=>{renderProgress();showRatingChange();});const root=document.getElementById('tutorRoot');if(root)observer.observe(root,{subtree:true,childList:true});renderProgress();
+  let scheduled=false;
+  const observer=new MutationObserver(mutations=>{
+    const box=document.getElementById('tutorLevelProgress');
+    if(box&&mutations.every(m=>box===m.target||box.contains(m.target)))return;
+    if(scheduled)return;
+    scheduled=true;
+    requestAnimationFrame(()=>{scheduled=false;renderProgress();showRatingChange();});
+  });
+  const root=document.getElementById('tutorRoot');if(root)observer.observe(root,{subtree:true,childList:true});renderProgress();
   tutor.__me20ProgressionInstalled=true;
 })();
