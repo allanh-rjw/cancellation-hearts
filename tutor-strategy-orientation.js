@@ -40,18 +40,19 @@
     if(!body||!exercise) return;
     const expert=adapter.expertModel(exercise);
     if(!expert) return;
-    const old=body.querySelector('.tutor-strategy-orientation');
-    if(old) old.remove();
     const hand=body.querySelector('.hand-card');
-    if(!hand) return;
+    const old=body.querySelector('.tutor-strategy-orientation');
+    if(!hand){if(old)old.remove();return;}
     const copy=strategyCopy(expert,exercise);
     const practice=!!body.querySelector('.tutor-progress') || !!body.querySelector('.feedback-badge');
-    const card=document.createElement('div');
-    card.className='tutor-card tutor-strategy-orientation'+(practice?' compact-strategy':'');
-    card.innerHTML=practice
+    const className='tutor-card tutor-strategy-orientation'+(practice?' compact-strategy':'');
+    const html=practice
       ? `<div class="strategy-inline"><span>Recommended strategy</span><strong>${esc(copy.name)}</strong><p>${esc(copy.success)}</p></div>`
       : `<div class="eyebrow">Recommended strategy</div><h3>${esc(copy.name)}</h3><p><strong>Why it fits:</strong> ${esc(copy.why)}</p><p><strong>What success looks like:</strong> ${esc(copy.success)}</p>`;
-    hand.insertAdjacentElement('afterend',card);
+    const card=old||document.createElement('div');
+    if(card.className!==className)card.className=className;
+    if(card.innerHTML!==html)card.innerHTML=html;
+    if(card.previousElementSibling!==hand)hand.insertAdjacentElement('afterend',card);
   }
 
   let scheduled=false;
