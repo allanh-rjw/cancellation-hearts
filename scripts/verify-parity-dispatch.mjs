@@ -18,7 +18,7 @@ const server=createServer((req,res)=>{try{
   if(requested.startsWith('/v1/domains/')){
     gatewayRequests.push({method:req.method,path:requested});
     res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});
-    res.end(JSON.stringify({code:'authorization-denied'}));
+    res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));
     return;
   }
   const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));
@@ -29,15 +29,8 @@ const server=createServer((req,res)=>{try{
   res.end(readFileSync(file));
 }catch{res.writeHead(404);res.end('not found');}});
 
-server.listen(0,'127.0.0.1');await once(server,'listening');
-const appPort=server.address().port;
-const profile=mkdtempSync(join(tmpdir(),'hearts-parity-dispatch-'));
-let chromeError='';
-const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
-chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
-
-try{
-  const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);
+async function verifyDispatch(debugPort,baseUrl,{label,path,expectedMode}){
+  gatewayRequests.length=0;
   const target=await openTarget(debugPort);
   const ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');
   let nextId=0;const pending=new Map();
@@ -45,15 +38,30 @@ try{
   const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;const timer=setTimeout(()=>{pending.delete(id);reject(new Error(`DevTools command timed out: ${method}`));},6000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}));});
   const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result?.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result?.result?.value;};
   await send('Runtime.enable');await send('Page.enable');
-  await send('Page.navigate',{url:`http://127.0.0.1:${appPort}/?learningMode=parity`});
-  for(let i=0;i<100;i++){const mode=await evaluate(`window.CancellationHeartsLearningRuntime?.status?.().mode??null`);if(mode==='parity')break;await sleep(100);if(i===99)throw new Error('Parity runtime did not initialize');}
+  await send('Page.navigate',{url:`${baseUrl}/${path}`});
+  for(let i=0;i<100;i++){const mode=await evaluate(`window.CancellationHeartsLearningRuntime?.status?.().mode??null`);if(mode===expectedMode)break;await sleep(100);if(i===99)throw new Error(`${label}: runtime did not initialize as ${expectedMode}`);}
   await evaluate(`document.getElementById('newGameBtn').click()`);
   for(let i=0;i<40&&gatewayRequests.length===0;i++)await sleep(100);
-  if(gatewayRequests.length===0)throw new Error('Parity mode started a game but dispatched zero Learning Gateway requests');
+  if(gatewayRequests.length===0)throw new Error(`${label}: Start New Game dispatched zero Learning Gateway requests`);
   const operations=[...new Set(gatewayRequests.map(row=>row.path.split('/').pop()))];
-  if(!operations.includes('assess-hand'))throw new Error(`Parity dispatch did not include assess-hand; observed: ${operations.join(', ')}`);
-  console.log(`parity-dispatch: ${gatewayRequests.length} Gateway request(s); operations=${operations.join(',')}`);
+  if(!operations.includes('assess-hand'))throw new Error(`${label}: dispatch did not include assess-hand; observed: ${operations.join(', ')}`);
+  console.log(`${label}: ${gatewayRequests.length} Gateway request(s); operations=${operations.join(',')}`);
   ws.close();
+}
+
+server.listen(0,'127.0.0.1');await once(server,'listening');
+const appPort=server.address().port;
+const profile=mkdtempSync(join(tmpdir(),'hearts-gateway-dispatch-'));
+let chromeError='';
+const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
+chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
+
+try{
+  const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);
+  const baseUrl=`http://127.0.0.1:${appPort}`;
+  await verifyDispatch(debugPort,baseUrl,{label:'default-gateway',path:'',expectedMode:'gateway'});
+  await verifyDispatch(debugPort,baseUrl,{label:'parity-override',path:'?learningMode=parity',expectedMode:'parity'});
+  console.log('gateway-dispatch: production default and parity both dispatch Learning Gateway requests');
 }finally{
   chrome.kill('SIGTERM');
   if(chrome.exitCode===null)await once(chrome,'exit');
