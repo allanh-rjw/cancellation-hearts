@@ -39,6 +39,10 @@ async function inspectMode(port,baseUrl,mode){
   if(snapshot.runtime?.mode!==mode)throw new Error(`${mode}: requested migration mode did not initialize`);
   if(exceptions.length)throw new Error(`${mode}: uncaught browser exception before game start: ${exceptions.join(' | ')}`);
   console.log(`${mode}: setup startup OK`);
+  if(mode==='legacy'){
+    const coreSource=await evaluate(`window.AdaptiveCoach?.AdaptiveCoachCore?.toString?.() ?? 'missing'`);
+    console.log(`BROWSER_ADAPTIVE_COACH_CORE_SOURCE\n${String(coreSource).slice(0,8000)}\nEND_BROWSER_ADAPTIVE_COACH_CORE_SOURCE`);
+  }
   await evaluate(`document.getElementById('newGameBtn').click()`);
   console.log(`${mode}: Start New Game clicked`);
   await sleep(2500);
@@ -53,4 +57,4 @@ async function inspectMode(port,baseUrl,mode){
 }
 const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({code:'authorization-denied'}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
 server.listen(0,'127.0.0.1');await once(server,'listening');const appPort=server.address().port;const profile=mkdtempSync(join(tmpdir(),'hearts-browser-startup-'));let chromeError='';const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
-try{const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const baseUrl=`http://127.0.0.1:${appPort}`;for(const mode of ['legacy','parity'])await inspectMode(debugPort,baseUrl,mode);console.log('browser-startup diagnostic: legacy + parity Start New Game OK with tutor UI eval deferred');}finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
+try{const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const baseUrl=`http://127.0.0.1:${appPort}`;for(const mode of ['legacy','parity'])await inspectMode(debugPort,baseUrl,mode);console.log('browser-startup diagnostic: legacy + parity Start New Game OK with eager tutor core construction suppressed');}finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
