@@ -17,13 +17,16 @@ const mime = new Map([
 ]);
 function chromeBinary(){const bins=[process.env.CHROME_BIN,'google-chrome-stable','google-chrome','chromium','chromium-browser'].filter(Boolean);return bins.find(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0)??(()=>{throw new Error('Chrome/Chromium is required for browser startup verification');})();}
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
-async function waitForDebugPort(profile,chrome,stderr){const file=join(profile,'DevToolsActivePort');for(let i=0;i<100;i++){if(existsSync(file)){const port=Number(readFileSync(file,'utf8').split(/\r?\n/)[0]);if(Number.isInteger(port)&&port>0)return port;}if(chrome.exitCode!==null)throw new Error(`Chrome exited before DevTools started: ${stderr().slice(-1000)}`);await sleep(100);}throw new Error(`Chrome DevTools endpoint did not start: ${stderr().slice(-1000)}`);}
+async function waitForDebugPort(profile,chrome,stderr){const file=join(profile,'DevToolsActivePort');for(let i=0;i<150;i++){if(existsSync(file)){const port=Number(readFileSync(file,'utf8').split(/\r?\n/)[0]);if(Number.isInteger(port)&&port>0)return port;}if(chrome.exitCode!==null)throw new Error(`Chrome exited before DevTools started: ${stderr().slice(-1000)}`);await sleep(100);}throw new Error(`Chrome DevTools endpoint did not start: ${stderr().slice(-1000)}`);}
 async function openTarget(port){const r=await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'});if(!r.ok)throw new Error(`Unable to create Chrome target (${r.status})`);return r.json();}
 async function inspectMode(port,baseUrl,mode){
-  const target=await openTarget(port);const ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');
+  const target=await openTarget(port);const ws=new WebSocket(target.webSocketDebuggerUrl);await Promise.race([once(ws,'open'),sleep(5000).then(()=>{throw new Error(`${mode}: DevTools websocket did not open`);})]);
   let nextId=0;const pending=new Map();const exceptions=[];
-  ws.addEventListener('message',event=>{const msg=JSON.parse(String(event.data));if(msg.id&&pending.has(msg.id)){const {resolve,reject}=pending.get(msg.id);pending.delete(msg.id);msg.error?reject(new Error(msg.error.message)):resolve(msg.result);}else if(msg.method==='Runtime.exceptionThrown'){exceptions.push(msg.params?.exceptionDetails?.exception?.description??msg.params?.exceptionDetails?.text??'uncaught browser exception');}});
-  const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
+  function failPending(error){for(const {reject,timer} of pending.values()){clearTimeout(timer);reject(error);}pending.clear();}
+  ws.addEventListener('close',()=>failPending(new Error(`${mode}: DevTools target closed unexpectedly`)));
+  ws.addEventListener('error',()=>failPending(new Error(`${mode}: DevTools websocket failed`)));
+  ws.addEventListener('message',event=>{const msg=JSON.parse(String(event.data));if(msg.id&&pending.has(msg.id)){const {resolve,reject,timer}=pending.get(msg.id);clearTimeout(timer);pending.delete(msg.id);msg.error?reject(new Error(msg.error.message)):resolve(msg.result);}else if(msg.method==='Runtime.exceptionThrown'){exceptions.push(msg.params?.exceptionDetails?.exception?.description??msg.params?.exceptionDetails?.text??'uncaught browser exception');}});
+  const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;const timer=setTimeout(()=>{pending.delete(id);reject(new Error(`${mode}: DevTools command timed out: ${method}`));},5000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}));});
   const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result?.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result?.result?.value;};
   await send('Runtime.enable');await send('Page.enable');await send('Page.navigate',{url:`${baseUrl}/?learningMode=${mode}`});
   let snapshot=null;
@@ -35,15 +38,18 @@ async function inspectMode(port,baseUrl,mode){
   if(snapshot.gateway?.defaultMode!=='legacy')throw new Error(`${mode}: production default drifted from legacy`);
   if(snapshot.runtime?.mode!==mode)throw new Error(`${mode}: requested migration mode did not initialize`);
   if(exceptions.length)throw new Error(`${mode}: uncaught browser exception before game start: ${exceptions.join(' | ')}`);
+  console.log(`${mode}: setup startup OK`);
 
   await evaluate(`document.getElementById('newGameBtn').click()`);
+  console.log(`${mode}: Start New Game clicked`);
   await sleep(2500);
-  const started=JSON.parse(await evaluate(`JSON.stringify({setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,gameHidden:document.getElementById('game')?.classList.contains('hidden')??null,players:typeof state!=='undefined'?state.players?.length:null,phase:typeof state!=='undefined'?state.phase:null,runtime:window.CancellationHeartsLearningRuntime?.status?.()??null})`));
+  const started=JSON.parse(await evaluate(`JSON.stringify({setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,gameHidden:document.getElementById('game')?.classList.contains('hidden')??null,players:typeof state!=='undefined'?state.players?.length:null,phase:typeof state!=='undefined'?state.phase:null,runtime:window.CancellationHeartsLearningRuntime?.status?.()??null,causal:window.__causalPlannerLoaded??null,tutor:window.__adaptiveTutorLoaded??null})`));
   if(started.setupHidden!==true)throw new Error(`${mode}: setup remained visible after Start New Game`);
   if(started.gameHidden!==false)throw new Error(`${mode}: game did not remain visible after Start New Game`);
   if(started.players!==8)throw new Error(`${mode}: game did not initialize eight players`);
   if(!['passing','playing'].includes(started.phase))throw new Error(`${mode}: unexpected post-start phase ${started.phase}`);
   if(exceptions.length)throw new Error(`${mode}: uncaught browser exception after game start: ${exceptions.join(' | ')}`);
+  console.log(`${mode}: post-start OK (${started.phase}; causal=${started.causal}; tutor=${started.tutor})`);
   ws.close();
 }
 const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({code:'authorization-denied'}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
