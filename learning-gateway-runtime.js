@@ -1,9 +1,10 @@
 (async function installLearningGatewayRuntime(){
   const api=await import('./learning-gateway-client.mjs');
   const STORAGE_KEY='cancellationHearts.learningGateway.mode';
+  const DEFAULT_MODE='gateway';
   const allowed=new Set(['legacy','gateway','parity']);
   const runtime={
-    mode:'legacy',
+    mode:DEFAULT_MODE,
     lastResults:{},
     parityResults:{},
     lastError:null,
@@ -21,7 +22,7 @@
     const query=new URLSearchParams(location.search).get('learningMode');
     if(allowed.has(query)) return query;
     try{const stored=localStorage.getItem(STORAGE_KEY);if(allowed.has(stored))return stored;}catch{}
-    return 'legacy';
+    return DEFAULT_MODE;
   }
   function configuredBaseUrl(){
     const explicit=typeof window.CANCELLATION_HEARTS_GATEWAY_BASE_URL==='string'?window.CANCELLATION_HEARTS_GATEWAY_BASE_URL.trim():'';
@@ -29,7 +30,7 @@
     return (explicit||meta).replace(/\/$/,'');
   }
   function setMode(value,{persist=true}={}){
-    runtime.mode=api.normalizeMigrationMode(value,'legacy');
+    runtime.mode=api.normalizeMigrationMode(value,DEFAULT_MODE);
     if(persist){try{localStorage.setItem(STORAGE_KEY,runtime.mode);}catch{}}
     return runtime.mode;
   }
@@ -223,7 +224,7 @@
     schemaVersion:1,
     domainId:'cancellation-hearts',
     modes:['legacy','gateway','parity'],
-    defaultMode:'legacy',
+    defaultMode:DEFAULT_MODE,
     learnerVisibleOnly:true,
     serviceCredentialsInBrowser:false,
     operations:[...api.LEARNING_OPERATIONS]
