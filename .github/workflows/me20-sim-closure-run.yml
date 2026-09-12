@@ -6,28 +6,22 @@ on:
       - fix/me20-sim-diagnostic-scored-records
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  card-normalization-fix:
-    if: github.event.head_commit.message == 'Run verified ME20 card normalization fix'
+  canonical-inspection:
+    if: github.event.head_commit.message == 'Run canonical ME20-SIM inspection'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/me20-sim-diagnostic-scored-records
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply card-name normalization fix
-        run: python3 scripts/me20-card-normalize-fix.py
       - name: Run small ME20-SIM gate
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Commit verified normalization fix
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hearts-feedback-diagnosis.js simulation/cases.mjs
-          git commit -m "Normalize natural card names in Tutor diagnosis"
-          git push origin HEAD:fix/me20-sim-diagnostic-scored-records
+      - name: Run canonical 100-learner batch
+        run: node simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
+      - name: Print canonical report
+        run: cat simulation/results/latest.md
