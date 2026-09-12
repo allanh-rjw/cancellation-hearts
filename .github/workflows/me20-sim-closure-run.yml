@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   closure-run:
+    if: github.event.head_commit.message == 'Retry ME20-SIM closure runner'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix diagnostic scored-record flow and retire one-shot runner
+      - name: Fix diagnostic scored-record flow
         shell: bash
         run: |
           set -euo pipefail
@@ -39,19 +40,10 @@ jobs:
               raise SystemExit('Expected diagnostic placement call not found')
           text = text.replace(old, new, 1)
           harness.write_text(text)
-
-          workflow = Path('.github/workflows/adaptive-tutor-runtime.yml')
-          wf = workflow.read_text()
-          old = 'run: node --experimental-default-type=module scripts/verify-tutor-simulation.mjs'
-          new = 'run: node scripts/verify-tutor-simulation.mjs'
-          if old not in wf:
-              raise SystemExit('Expected obsolete ME20-SIM invocation not found')
-          workflow.write_text(wf.replace(old, new, 1))
           PY
-          rm .github/workflows/me20-sim-closure-run.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add simulation/harness.mjs .github/workflows/adaptive-tutor-runtime.yml .github/workflows/me20-sim-closure-run.yml
+          git add simulation/harness.mjs
           git commit -m "Fix ME20-SIM diagnostic scored-record flow"
           git push origin HEAD:fix/me20-sim-diagnostic-scored-records
       - name: Run small ME20-SIM gate
