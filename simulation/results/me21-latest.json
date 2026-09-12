@@ -1,0 +1,107 @@
+{
+  "generatedAt": "2026-09-12T22:33:58.458Z",
+  "seedFamilies": {
+    "standard": 2026091300,
+    "games": 2026093000,
+    "soloPractice": 2026100000,
+    "twoPractice": 2026110000,
+    "tutor": 2026120000
+  },
+  "counts": {
+    "standardHands": 1000,
+    "games": 100,
+    "soloPractice": 500,
+    "twoPractice": 500,
+    "tutorHands": 500
+  },
+  "standard": {
+    "hands": 1000,
+    "failures": [],
+    "difficultyCounts": {
+      "easy": 250,
+      "medium": 250,
+      "hard": 250,
+      "expert": 250
+    },
+    "personaCounts": {
+      "The Minimalist": 936,
+      "The Enforcer": 1048,
+      "The Canceller": 968,
+      "The Opportunist": 1016,
+      "The Suit Engineer": 976,
+      "The Hunter": 1008,
+      "The Moonshot": 1048
+    },
+    "passCounts": {
+      "0": 125,
+      "1": 125,
+      "2": 125,
+      "3": 125,
+      "4": 125,
+      "-1": 125,
+      "-2": 125,
+      "-3": 125
+    }
+  },
+  "games": {
+    "completed": 100,
+    "failures": [],
+    "targets": {
+      "100": 34,
+      "150": 33,
+      "200": 33
+    },
+    "minHands": 6,
+    "maxHands": 26,
+    "avgHands": 13.56
+  },
+  "practice": {
+    "solo": 500,
+    "two": 500,
+    "failures": [],
+    "outcomes": {
+      "solo": {
+        "success": 20,
+        "broken": 480,
+        "failedAtEnd": 0
+      },
+      "two": {
+        "success": 12,
+        "broken": 485,
+        "failedAtEnd": 3
+      }
+    },
+    "strengths": {
+      "ridiculous": 250,
+      "strong": 250,
+      "solid": 250,
+      "marginal": 250
+    }
+  },
+  "tutor": {
+    "hands": 500,
+    "recommendations": 6376,
+    "pathways": 6376,
+    "failures": [],
+    "strategyCounts": {
+      "avoidance": 238,
+      "targeting": 171,
+      "twoMoon": 75,
+      "cancellation": 11,
+      "soloMoon": 5
+    },
+    "difficultyCounts": {
+      "easy": 125,
+      "medium": 126,
+      "hard": 125,
+      "expert": 124
+    }
+  },
+  "failures": [],
+  "clusters": [],
+  "syntheticIsolation": {
+    "calibrationEligible": 0,
+    "learnerModelEligible": 0,
+    "productionStateTouched": false
+  }
+}
