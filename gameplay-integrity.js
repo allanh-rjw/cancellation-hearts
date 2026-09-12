@@ -39,6 +39,39 @@
     return originalFinishTrick();
   };
 
+  const originalFinishRound=finishRound;
+  finishRound=function(){
+    if(state.mode!=='practice') return originalFinishRound();
+
+    const shooters=practiceShooters();
+    const shooterPoints=state.players.reduce((sum,p,i)=>sum+(shooters.has(i)?p.roundPoints:0),0);
+    const outsiderPoints=state.players.reduce((sum,p,i)=>sum+(shooters.has(i)?0:p.roundPoints),0);
+    const successfulMoon=shooterPoints===52&&outsiderPoints===0;
+    const startingRound=state.round;
+    const startingDealer=state.dealer;
+
+    const result=originalFinishRound();
+    if(!successfulMoon) return result;
+
+    state.round=startingRound;
+    state.dealer=startingDealer;
+    state.practiceEnded=true;
+    state.gameOver=true;
+    state.phase='practice-end';
+    $('nextTrickBtn').classList.add('hidden');
+    $('nextRoundBtn').classList.add('hidden');
+    const message=state.practiceType==='solo'
+      ? 'Solo moon completed. You captured all 52 penalty points. Practice complete.'
+      : 'Two-player moon completed. You and Partner captured all 52 penalty points. Practice complete.';
+    setStatus(message);
+    state.lastPostAnalysis=buildPostGameAnalysis(message);
+    renderPostHandAnalysis();
+    renderPostGameAnalysis();
+    renderOpponentAnalysis();
+    renderAll();
+    return result;
+  };
+
   const rules=document.querySelector('.rules-copy');
   if(rules&&!rules.textContent.includes('final trick has no winner')){
     const p=document.createElement('p');
