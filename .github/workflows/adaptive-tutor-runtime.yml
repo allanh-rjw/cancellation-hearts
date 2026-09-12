@@ -65,6 +65,8 @@ jobs:
             scripts/verify-me21-final-trick.mjs
             scripts/verify-me21-standard-lifecycle.mjs
             scripts/verify-me21-moon-practice.mjs
+            scripts/verify-me21-ui-pivot.mjs
+            scripts/run-me21-canonical-campaign.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -90,5 +92,7 @@ jobs:
         run: node scripts/verify-me21-standard-lifecycle.mjs
       - name: Verify ME21 Shoot-the-Moon Practice integrity
         run: node scripts/verify-me21-moon-practice.mjs
+      - name: Verify ME21 UI reachability and strategy pivots
+        run: node scripts/verify-me21-ui-pivot.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
