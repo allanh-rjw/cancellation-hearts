@@ -60,6 +60,7 @@ jobs:
             simulation/report.mjs
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
+            scripts/verify-me21-standard-game.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -77,5 +78,7 @@ jobs:
         run: node scripts/verify-parity-dispatch.mjs
       - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization
         run: node scripts/verify-browser-startup.mjs
+      - name: Verify ME21 Standard Game production simulation
+        run: node scripts/verify-me21-standard-game.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
