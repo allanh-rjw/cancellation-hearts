@@ -7,12 +7,12 @@ Synthetic simulation is **not learner evidence**. Every simulated record is tagg
 ## Commands
 
 ```bash
-node --experimental-default-type=module simulation/cli.mjs --mode regression --seed 20260911
-node --experimental-default-type=module simulation/cli.mjs --mode placement --seed 20260911
-node --experimental-default-type=module simulation/cli.mjs --mode passing --seed 20260911
-node --experimental-default-type=module simulation/cli.mjs --mode advanced --seed 20260911
-node --experimental-default-type=module simulation/cli.mjs --mode alternative --seed 20260911
-node --experimental-default-type=module simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
+node simulation/cli.mjs --mode regression --seed 20260911
+node simulation/cli.mjs --mode placement --seed 20260911
+node simulation/cli.mjs --mode passing --seed 20260911
+node simulation/cli.mjs --mode advanced --seed 20260911
+node simulation/cli.mjs --mode alternative --seed 20260911
+node simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
 ```
 
 `regression` runs permanent known Tutor failures. `passing` probes strategic pass reasoning and post-pass revision. `advanced` probes moon-threat thresholds, minimum intervention, observation, targeting, cancellation, and carryover reasoning. `alternative` measures whether known strong or defensible pathways are incorrectly rejected. `batch` runs full synthetic journeys beginning with the real five-hand Assessment Core diagnostic.

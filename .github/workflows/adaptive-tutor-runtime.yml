@@ -66,9 +66,9 @@ jobs:
           done
           node --check learning-gateway-client.mjs
       - name: Run Hearts Adaptive Trainer smoke test
-        run: node --experimental-default-type=module scripts/verify-adaptive-tutor-runtime.mjs
+        run: node scripts/verify-adaptive-tutor-runtime.mjs
       - name: Verify five-hand diagnostic through Assessment and Calibration Cores
-        run: node --experimental-default-type=module scripts/verify-tutor-diagnostic.mjs
+        run: node scripts/verify-tutor-diagnostic.mjs
       - name: Verify ULS Learning Gateway client and learner-visible boundary
         run: node scripts/verify-learning-gateway-client.mjs
       - name: Verify legacy/gateway semantic parity harness
@@ -78,4 +78,4 @@ jobs:
       - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization
         run: node scripts/verify-browser-startup.mjs
       - name: Verify simulated learner Tutor behavior
-        run: node --experimental-default-type=module scripts/verify-tutor-simulation.mjs
+        run: node scripts/verify-tutor-simulation.mjs

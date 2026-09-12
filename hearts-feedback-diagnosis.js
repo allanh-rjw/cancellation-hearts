@@ -4,7 +4,9 @@
   const original=adapter.evaluate.bind(adapter);
 
   function normalize(text){
+    const ranks={ace:'a',king:'k',queen:'q',jack:'j'},suits={clubs:'♣',diamonds:'♦',spades:'♠',hearts:'♥'};
     return String(text||'').toLowerCase()
+      .replace(/\b(ace|king|queen|jack|10|[2-9]) of (clubs|diamonds|spades|hearts)\b/g,(_,rank,suit)=>(ranks[rank]||rank)+suits[suit])
       .replace(/10h/g,'10♥').replace(/qh/g,'q♥').replace(/jh/g,'j♥')
       .replace(/qs/g,'q♠').replace(/as/g,'a♠').replace(/10s/g,'10♠').replace(/6s/g,'6♠').replace(/2s/g,'2♠').replace(/9s/g,'9♠')
       .replace(/kd/g,'k♦').replace(/jd/g,'j♦').replace(/10d/g,'10♦').replace(/7d/g,'7♦').replace(/6d/g,'6♦').replace(/4d/g,'4♦')
@@ -55,8 +57,8 @@
     }
 
     if(id==='preserve'){
-      const preservesProtection=has(t,/(2♠|protect.*q♠|q♠.*protect)/);
-      const mentionsLow=has(t,/(5♣|6♦|6♥|7♥|low club|low diamond|low heart|low card)/);
+      const preservesProtection=has(t,/(2♠|2 of spades|protect.*(?:q♠|queen of spades)|(?:q♠|queen of spades).*protect)/);
+      const mentionsLow=has(t,/(5♣|5 of clubs|6♦|6 of diamonds|6♥|6 of hearts|7♥|7 of hearts|low club|low diamond|low heart|low card|low exit)/);
       const statesExitJob=has(t,/(exit|get off lead|lose.*lead|surrender.*lead|later loser)/);
       const namesExit=mentionsLow&&statesExitJob;
       if(preservesProtection&&namesExit)return done('You answered both parts: 2♠ must be preserved while Q♠ still depends on it, and you also identified a low card to keep as a later way to surrender the lead.');
@@ -70,7 +72,7 @@
   function usefulVoidDiagnosis(id,t){
     if(id==='objective'){
       const namesDanger=has(t,/(a♠|ace of spades|j♥|jack of hearts|forced winner|future winner|dangerous card|liabilit)/);
-      const statesGoal=has(t,/(unload|dump|discard|shed|lose.*saf|void|place to|get rid|avoid.*win|prevent.*win)/);
+      const statesGoal=has(t,/(unload|dump|discard|shed|dispose|disposal|lose.*saf|void|place to|get rid|avoid.*win|prevent.*win)/);
       if(namesDanger&&statesGoal)return done('You answered both parts: you identified the card or cards most likely to trap you later, and you stated that the useful state is one that lets those liabilities leave the hand safely.');
       if(namesDanger)return {recognized:'You identified the right kind of danger, especially A♠ and possibly J♥.',missing:'The second part is what you want to make possible for that card.',nextQuestion:'What position would let you unload that card safely later?'};
       if(has(t,/(shortest.*void|void.*shortest|clubs.*shortest)/))return {recognized:'You noticed that clubs are relatively short.',correction:'That alone does not make clubs the best void.',missing:'A useful void needs a specific dangerous card to carry out of the hand.',nextQuestion:'Which card would you want a club void to help you unload?'};
@@ -106,7 +108,7 @@
     }
 
     if(id==='preserve'){
-      const namesLow=has(t,/(4♦|4♥|2♠|low card|low diamond|low heart)/);
+      const namesLow=has(t,/(4♦|4 of diamonds|4♥|4 of hearts|2♠|2 of spades|low card|low diamond|low heart|low exit)/);
       const statesJob=has(t,/(exit|get off lead|surrender.*lead|lose.*lead|avoid.*control|stay off lead|later loser)/);
       if(namesLow&&statesJob)return done('You answered both parts: you identified a low card worth preserving and explained its later job as an exit or a way to avoid being trapped on lead.');
       if(namesLow)return {recognized:'You picked a sensible low card to preserve.',missing:'The other part is the later job you are saving it for.',nextQuestion:'After A♠ is gone, how could that low card help you surrender the lead?'};

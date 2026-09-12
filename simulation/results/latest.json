@@ -1,0 +1,130 @@
+{
+  "source": "synthetic-simulation",
+  "kind": "batch",
+  "createdAtUtc": "2026-09-12T16:20:07.429Z",
+  "learners": 100,
+  "seed": 20260911,
+  "hands": 2,
+  "personas": [
+    "beginner-trick-by-trick",
+    "beginner-good-instinct-weak-explanation",
+    "developing-weak-contingency",
+    "developing-over-controller",
+    "advanced-over-targeter",
+    "advanced-moon-overreactor",
+    "advanced-weak-passing",
+    "expert-like",
+    "expert-overconfident",
+    "cautious-incomplete"
+  ],
+  "placement": {
+    "matrix": {
+      "beginner": {
+        "beginner": 20
+      },
+      "developing": {
+        "advanced": 1,
+        "developing": 15,
+        "beginner": 14
+      },
+      "advanced": {
+        "developing": 26,
+        "expert": 1,
+        "advanced": 2,
+        "beginner": 1
+      },
+      "expert": {
+        "expert": 10,
+        "advanced": 7,
+        "developing": 3
+      }
+    },
+    "exact": 47,
+    "withinOne": 96,
+    "exactRate": 0.47,
+    "withinOneRate": 0.96
+  },
+  "evaluationMetrics": {
+    "grounding": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "listening": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "inference-discipline": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "answer-reasoning-separation": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "specificity": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "minimal-intervention": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "pathway-coherence": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "adaptive-scaffolding": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "progression-quality": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "passing-quality": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "advanced-table-reasoning": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    },
+    "transfer": {
+      "pass": 1604,
+      "total": 1604,
+      "rate": 1
+    }
+  },
+  "failures": [],
+  "validAlternativeRejectionRate": 0,
+  "isolation": {
+    "calibrationEligible": 0,
+    "learnerModelEligible": 0,
+    "productionStateTouched": false
+  },
+  "packets": {
+    "passing": {
+      "passed": true,
+      "failures": []
+    },
+    "advanced": {
+      "passed": true,
+      "failures": []
+    },
+    "alternatives": {
+      "validAlternativeRejectionRate": 0,
+      "failures": []
+    }
+  }
+}
