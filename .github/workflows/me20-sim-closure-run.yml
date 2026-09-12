@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  postpass-causal-fix:
-    if: github.event.head_commit.message == 'Run ME20 post-pass causal verification'
+  finalize:
+    if: github.event.head_commit.message == 'Finalize ME20-SIM canonical report'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,18 +20,33 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply post-pass causal parser fix
-        run: python3 scripts/me20-postpass-causal-fix.py
       - name: Run small ME20-SIM gate
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Commit verified parser fix
+      - name: Run final canonical 100-learner batch
+        run: node simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
+      - name: Validate closure invariants
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report=JSON.parse(fs.readFileSync('simulation/results/latest.json','utf8'));
+          const failures=[];
+          if(report.learners!==100)failures.push('learners');
+          if(report.seed!==20260911)failures.push('seed');
+          if(report.failures?.length)failures.push('recurring-failures');
+          if(report.validAlternativeRejectionRate!==0)failures.push('alternative-rejection');
+          if(report.isolation?.calibrationEligible!==0)failures.push('calibration-firewall');
+          if(report.isolation?.learnerModelEligible!==0)failures.push('learner-model-firewall');
+          if(report.isolation?.productionStateTouched!==false)failures.push('production-state');
+          if(report.placement?.withinOneRate<0.9)failures.push('placement');
+          for(const [name,metric] of Object.entries(report.evaluationMetrics||{}))if(metric.rate!==1)failures.push(`metric:${name}`);
+          if(failures.length)throw new Error(`ME20 closure invariant failure: ${failures.join(', ')}`);
+          console.log(JSON.stringify({placement:report.placement,evaluationMetrics:report.evaluationMetrics,validAlternativeRejectionRate:report.validAlternativeRejectionRate,isolation:report.isolation},null,2));
+          NODE
+      - name: Commit canonical reports and remove temporary regular files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hearts-passing-reasoning.js simulation/cases.mjs
-          git commit -m "Recognize direct causal post-pass phrasing"
+          git rm -f simulation/.me20-* scripts/me20-*-fix.py
+          git add simulation/results/latest.json simulation/results/latest.md
+          git commit -m "Record final ME20-SIM canonical closure report"
           git push origin HEAD:fix/me20-sim-diagnostic-scored-records
-      - name: Run canonical 100-learner batch
-        run: node simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
-      - name: Print canonical report
-        run: cat simulation/results/latest.md
