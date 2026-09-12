@@ -86,4 +86,5 @@ jobs:
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
       - name: Run deterministic standard and moon-practice gameplay simulations
+        # This is the cross-product regression gate after Tutor validation.
         run: node scripts/verify-gameplay-simulation-qa.mjs
