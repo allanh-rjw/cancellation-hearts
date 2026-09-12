@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check runtime, assessment, calibration, and gateway module syntax
+      - name: Check runtime, assessment, calibration, gateway, and simulation module syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -50,6 +50,15 @@ jobs:
             tutor-level-progression.js
             causal-loader.js
             learning-gateway-runtime.js
+            simulation/contracts.mjs
+            simulation/personas.mjs
+            simulation/cases.mjs
+            simulation/generator.mjs
+            simulation/evaluator.mjs
+            simulation/harness.mjs
+            simulation/report.mjs
+            simulation/cli.mjs
+            scripts/verify-tutor-simulation.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -67,3 +76,5 @@ jobs:
         run: node scripts/verify-parity-dispatch.mjs
       - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization
         run: node scripts/verify-browser-startup.mjs
+      - name: Verify simulated learner Tutor behavior
+        run: node --experimental-default-type=module scripts/verify-tutor-simulation.mjs
