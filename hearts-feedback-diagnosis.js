@@ -72,7 +72,7 @@
   function usefulVoidDiagnosis(id,t){
     if(id==='objective'){
       const namesDanger=has(t,/(a♠|ace of spades|j♥|jack of hearts|forced winner|future winner|dangerous card|liabilit)/);
-      const statesGoal=has(t,/(unload|dump|discard|shed|lose.*saf|void|place to|get rid|avoid.*win|prevent.*win)/);
+      const statesGoal=has(t,/(unload|dump|discard|shed|dispose|disposal|lose.*saf|void|place to|get rid|avoid.*win|prevent.*win)/);
       if(namesDanger&&statesGoal)return done('You answered both parts: you identified the card or cards most likely to trap you later, and you stated that the useful state is one that lets those liabilities leave the hand safely.');
       if(namesDanger)return {recognized:'You identified the right kind of danger, especially A♠ and possibly J♥.',missing:'The second part is what you want to make possible for that card.',nextQuestion:'What position would let you unload that card safely later?'};
       if(has(t,/(shortest.*void|void.*shortest|clubs.*shortest)/))return {recognized:'You noticed that clubs are relatively short.',correction:'That alone does not make clubs the best void.',missing:'A useful void needs a specific dangerous card to carry out of the hand.',nextQuestion:'Which card would you want a club void to help you unload?'};
