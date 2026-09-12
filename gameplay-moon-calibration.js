@@ -1,7 +1,8 @@
 // Empirical starting-hand calibration for Shoot-the-Moon practice.
 // Strength labels are represented by progressively weaker control structures,
 // not by hidden play-time probability bonuses. Two-player Ridiculous gives
-// both shooters a natural point-suit scoring route.
+// both shooters a natural point-suit scoring route and is held to the same
+// monotonic calibration gate as the Solo ladder.
 
 const baseDealPracticeRoundForCalibration=dealPracticeRound;
 dealPracticeRound=function(){
