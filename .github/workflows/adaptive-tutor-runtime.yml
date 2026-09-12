@@ -64,6 +64,7 @@ jobs:
             scripts/verify-me21-standard-game.mjs
             scripts/verify-me21-final-trick.mjs
             scripts/verify-me21-standard-lifecycle.mjs
+            scripts/verify-me21-moon-practice.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -87,5 +88,7 @@ jobs:
         run: node scripts/verify-me21-final-trick.mjs
       - name: Verify ME21 Standard Game lifecycle and score targets
         run: node scripts/verify-me21-standard-lifecycle.mjs
+      - name: Verify ME21 Shoot-the-Moon Practice integrity
+        run: node scripts/verify-me21-moon-practice.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
