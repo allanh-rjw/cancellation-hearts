@@ -6,7 +6,7 @@
   function merge(result,patch){return {...result,...patch,diagnosis:{...(result?.diagnosis||{}),...(patch.diagnosis||{})}};}
   function hasSpecificQueenDanger(t){return /(q\s*♠|qs\b|queen of spades|q\s*♥|qh\b|queen of hearts|10\s*♥|10h\b|ten of hearts|q\s*♣|qc\b|queen of clubs|10\s*♦|10d\b|ten of diamonds)/i.test(t);}
   function statesFutureWinnerObjective(t){return /(avoid|prevent|keep).*?(forced|future).*winner|(?:forced|future).*winner.*?(avoid|prevent|keep)|not.*becom.*winner/i.test(t);}
-  function contradictoryControl(t){const off=/(stay|remain|keep).*off lead|off lead|do not want.*lead|don't want.*lead/i.test(t);const take=/(take|gain|win).*control|(take|gain|win).*lead|want.*control|want.*lead/i.test(t);const conditional=/\b(if|once|after|when|only if|until|unless)\b/i.test(t);const concreteFollowUp=/(lead|play).*(5c|5♣|2s|2♠|9s|9♠|6h|6♥|7h|7♥)|create.*void|spade round|heart round|disposal route/i.test(t);return off&&take&&!conditional&&!concreteFollowUp;}
+  function contradictoryControl(t){const off=/(stay|remain|keep).*off lead|off lead|do not want.*lead|don't want.*lead/i.test(t);const take=/(take|gain|win).*control|(take|gain|win).*lead|want (?:to )?(?:take|gain|win).*control|want (?:to )?(?:take|gain|win).*lead|want the lead|want to lead\b/i.test(t);const conditional=/\b(if|once|after|when|only if|until|unless)\b/i.test(t);const concreteFollowUp=/(lead|play).*(5c|5♣|2s|2♠|9s|9♠|6h|6♥|7h|7♥)|create.*void|spade round|heart round|disposal route/i.test(t);return off&&take&&!conditional&&!concreteFollowUp;}
   adapter.evaluate=function(step,response,ctx,profile){
     const result=original(step,response,ctx,profile)||{};
     const id=step?.id,exercise=ctx?.exercise||{},t=textOf(response);
