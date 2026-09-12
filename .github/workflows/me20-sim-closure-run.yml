@@ -5,44 +5,38 @@ on:
     branches: [fix/me20-sim-diagnostic-scored-records]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  card-name-pass-fix:
-    if: github.event.head_commit.message == 'Fix ME20-SIM card-name pass parsing'
+  diagnose-pass-listening:
+    if: github.event.head_commit.message == 'Diagnose ME20-SIM pass listening residuals'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/me20-sim-diagnostic-scored-records
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix card-name parsing and verify
+      - name: Print deterministic prepass learner texts
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          passing=Path('hearts-passing-reasoning.js')
-          text=passing.read_text()
-          old="function selectedPassCards(text){const match=String(text||'').match(/pass cards:\\s*([^\\n]+)/i),normalized=(match?.[1]||'').toUpperCase().replace(/♣/g,'C').replace(/♦/g,'D').replace(/♠/g,'S').replace(/♥/g,'H');return [...new Set((normalized.match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}"
-          new="function selectedPassCards(text){const match=String(text||'').match(/pass cards:\\s*([^\\n]+)/i),ranks={ace:'A',king:'K',queen:'Q',jack:'J'},suits={clubs:'C',diamonds:'D',spades:'S',hearts:'H'},named=(match?.[1]||'').replace(/\\b(10|[2-9]|ace|king|queen|jack) of (clubs|diamonds|spades|hearts)\\b/gi,(_,r,s)=>`${ranks[r.toLowerCase()]||r}${suits[s.toLowerCase()]}`),normalized=named.toUpperCase().replace(/♣/g,'C').replace(/♦/g,'D').replace(/♠/g,'S').replace(/♥/g,'H');return [...new Set((normalized.match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}"
-          if old not in text: raise SystemExit('Expected Unicode-aware pass-card parser not found')
-          passing.write_text(text.replace(old,new,1))
-
-          cases=Path('simulation/cases.mjs')
-          text=cases.read_text()
-          anchor=" {id:'pass-pathway-unicode-cards',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: K♣, 8♣, A♠',expected:{status:'correct'}},\n"
-          addition=anchor+" {id:'pass-pathway-card-names',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: king of clubs, 8 of clubs, ace of spades',expected:{status:'correct'}},\n"
-          if anchor not in text: raise SystemExit('Expected passing scenario insertion point not found')
-          cases.write_text(text.replace(anchor,addition,1))
-          PY
-          node scripts/verify-tutor-simulation.mjs
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hearts-passing-reasoning.js simulation/cases.mjs
-          git commit -m "Accept card names in passing reasoning"
-          git push origin HEAD:fix/me20-sim-diagnostic-scored-records
+          node --input-type=module <<'NODE'
+          import {SIMULATED_PERSONAS} from './simulation/personas.mjs';
+          import {generateSimulatedResponse} from './simulation/generator.mjs';
+          import {runBatch,loadTutorStack} from './simulation/harness.mjs';
+          const batch=await runBatch({learners:12,seed:20260911,hands:1});
+          const stack=await loadTutorStack();
+          const problem=stack.adapter.problemForId('guided-queen-protection');
+          const rows=[];
+          for(let i=0;i<12;i++){
+            const j=batch.journeys[i];
+            if(j.placedLevel==='beginner')continue;
+            const persona=SIMULATED_PERSONAS[i%SIMULATED_PERSONAS.length];
+            const seed=20260911+i;
+            const sim=generateSimulatedResponse({persona,problem,stepId:'prepass_pathway',seed:seed*1000,previousAnswers:{}});
+            rows.push({i,personaId:persona.learnerId,placedLevel:j.placedLevel,responseClass:sim.expectedResponseClass,complete:sim.complete,text:sim.responseText});
+          }
+          console.log('PREPASS_ROWS='+JSON.stringify(rows,null,2));
+          console.log('LISTENING_FAILURES='+JSON.stringify(batch.failures.filter(f=>f.signature==='already-answered-question-repeated'),null,2));
+          NODE
