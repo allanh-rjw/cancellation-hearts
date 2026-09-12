@@ -5,39 +5,56 @@ on:
     branches: [fix/me20-sim-diagnostic-scored-records]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose-preserve-listening:
-    if: github.event.head_commit.message == 'Diagnose ME20-SIM preserve listening residuals'
+  preserve-notation-fix:
+    if: github.event.head_commit.message == 'Fix ME20-SIM preserve notation handling'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/me20-sim-diagnostic-scored-records
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Print deterministic preserve learner texts and evaluator results
+      - name: Fix preserve notation handling and verify
         shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          import {SIMULATED_PERSONAS} from './simulation/personas.mjs';
-          import {generateSimulatedResponse} from './simulation/generator.mjs';
-          import {runBatch,loadTutorStack} from './simulation/harness.mjs';
-          const batch=await runBatch({learners:12,seed:20260911,hands:1});
-          const stack=await loadTutorStack();
-          const problem=stack.adapter.problemForId('guided-queen-protection');
-          const rows=[];
-          for(let i=0;i<12;i++){
-            const j=batch.journeys[i];
-            if(j.placedLevel==='beginner')continue;
-            const persona=SIMULATED_PERSONAS[i%SIMULATED_PERSONAS.length];
-            const seed=20260911+i;
-            const sim=generateSimulatedResponse({persona,problem,stepId:'preserve',seed:seed*1000+6,previousAnswers:{}});
-            const evalResult=stack.adapter.evaluate({id:'preserve'},{text:sim.responseText,choice:sim.responseText},{exercise:problem},j.profile);
-            rows.push({i,personaId:persona.learnerId,placedLevel:j.placedLevel,responseClass:sim.expectedResponseClass,complete:sim.complete,text:sim.responseText,evalResult});
-          }
-          console.log('PRESERVE_ROWS='+JSON.stringify(rows,null,2));
-          console.log('LISTENING_FAILURES='+JSON.stringify(batch.failures.filter(f=>f.signature==='already-answered-question-repeated'),null,2));
-          NODE
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          coaching=Path('tutor-situational-coaching.js')
+          text=coaching.read_text()
+          anchor="""      if(step.id==='cards'&&/2♠|9♠/.test(t)&&!explicitReason){
+        d.correct='2♠ and 9♠ are relevant because they sit underneath Q♠.';
+        d.ambiguous='I do not yet know which one you intend to preserve longer and why.';
+        d.nextQuestion='What job does 2♠ have that makes it more valuable to keep while Q♠ is still in your hand?';
+        result.gradeable=false;
+      }
+"""
+          addition=anchor+"""      if(step.id==='preserve'&&/(?:2♠|2 of spades)/.test(t)&&/(?:5♣|5 of clubs|low exit|separate low)/.test(t)&&explicitReason){
+        d.correct='You identified both kinds of cards that need to be preserved: 2♠ as protection under Q♠ and a separate low exit for surrendering the lead later.';
+        delete d.ambiguous;
+        delete d.nextQuestion;
+        result.gradeable=true;
+      }
+"""
+          if anchor not in text: raise SystemExit('Expected queen-protection cards block not found')
+          coaching.write_text(text.replace(anchor,addition,1))
+
+          cases=Path('simulation/cases.mjs')
+          text=cases.read_text()
+          anchor=" {id:'targeting-conditional',problemId:'guided-useful-void',stepId:'target',text:'I would target a player only if they had demonstrated a void or exposed high cards and the score justified the risk; otherwise I would leave them alone.',expected:{status:'correct',grounded:true}}\n"
+          addition=" {id:'preserve-queen-protection-unicode',problemId:'guided-queen-protection',stepId:'preserve',text:'I want to preserve 2♠ because it protects Q♠ through another spade round, plus a separate low exit such as 5♣ so I can surrender the lead later.',expected:{status:'correct',noRedundantQuestion:true,grounded:true}},\n {id:'preserve-queen-protection-card-names',problemId:'guided-queen-protection',stepId:'preserve',text:'I want to preserve 2 of spades because it protects the queen of spades through another spade round, plus a separate low exit such as 5 of clubs so I can surrender the lead later.',expected:{status:'correct',noRedundantQuestion:true,grounded:true}},\n"+anchor
+          if anchor not in text: raise SystemExit('Expected regression insertion point not found')
+          cases.write_text(text.replace(anchor,addition,1))
+          PY
+          node scripts/verify-tutor-simulation.mjs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tutor-situational-coaching.js simulation/cases.mjs
+          git commit -m "Accept natural card notation in preserve reasoning"
+          git push origin HEAD:fix/me20-sim-diagnostic-scored-records
