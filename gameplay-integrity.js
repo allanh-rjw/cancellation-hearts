@@ -56,8 +56,6 @@
     const startingDealer=state.dealer;
 
     const result=originalFinishRound();
-    if(!successfulMoon) return result;
-
     state.round=startingRound;
     state.dealer=startingDealer;
     state.practiceEnded=true;
@@ -65,9 +63,12 @@
     state.phase='practice-end';
     $('nextTrickBtn').classList.add('hidden');
     $('nextRoundBtn').classList.add('hidden');
-    const message=state.practiceType==='solo'
-      ? 'Solo moon completed. You captured all 52 penalty points. Practice complete.'
-      : 'Two-player moon completed. You and Partner captured all 52 penalty points. Practice complete.';
+    const target=state.practiceType==='solo'?'solo moon':'two-player moon';
+    const message=successfulMoon
+      ? (state.practiceType==='solo'
+        ? 'Solo moon completed. You captured all 52 penalty points. Practice complete.'
+        : 'Two-player moon completed. You and Partner captured all 52 penalty points. Practice complete.')
+      : `The ${target} was not completed before the hand ended. Practice complete.`;
     setStatus(message);
     state.lastPostAnalysis=buildPostGameAnalysis(message);
     renderPostHandAnalysis();
