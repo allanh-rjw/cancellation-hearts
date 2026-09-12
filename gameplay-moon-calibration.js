@@ -16,17 +16,20 @@ dealPracticeRound=function(){
     marginal:[['C','A',1],['C','K',1],['C','7',1],['D','A',1],['D','K',1],['D','8',1],['S','A',1],['S','Q',1],['S','5',1],['H','A',1],['H','K',1],['H','Q',1],['H','J',1]]
   };
 
-  // Two-player templates deliberately split point control. A pair is not
-  // stronger merely because one shooter can vacuum all 52 points; both must
-  // have a credible route to a penalty trick for the two-player moon to count.
+  // Two-player Ridiculous uses complementary control instead of simply
+  // concentrating more honors in one shooter. The human owns a long protected
+  // heart chain plus both club aces; Partner owns protected controls in the
+  // three non-heart suits. This creates an explicit control-transfer route:
+  // Partner can safely collect early dumped hearts, then a club lead can hand
+  // control to the human, who can cash the protected heart chain.
   const twoHuman={
-    ridiculous:[['H','A',2],['H','J',2],['H','9',2],['C','A',2],['D','A',2],['S','A',2],['S','K',1]],
+    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['H','9',1],['H','8',1],['C','A',2]],
     strong:[['H','A',2],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['S','K',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
     solid:[['H','A',1],['H','Q',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','Q',1],['D','A',1],['D','K',1],['D','Q',1]],
     marginal:[['H','A',1],['H','Q',1],['H','8',1],['S','A',1],['S','Q',1],['S','7',1],['C','A',1],['C','9',1],['C','5',1],['D','K',1],['D','8',1],['D','4',1],['D','3',1]]
   };
   const twoPartner={
-    ridiculous:[['H','K',2],['H','Q',2],['H','10',2],['S','Q',2],['S','K',1],['C','K',2],['D','K',2]],
+    ridiculous:[['C','K',2],['C','Q',2],['D','A',2],['D','K',2],['S','A',2],['S','K',2],['H','7',1]],
     strong:[['C','A',1],['C','K',1],['C','Q',2],['D','A',1],['D','K',1],['D','Q',2],['S','A',1],['S','K',1],['S','Q',1],['H','K',1],['H','Q',1]],
     solid:[['H','K',1],['H','J',1],['H','9',1],['H','7',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','J',1],['D','A',1],['D','K',1],['D','J',1]],
     marginal:[['H','K',1],['H','J',1],['H','7',1],['S','K',1],['S','Q',1],['S','6',1],['C','K',1],['C','10',1],['C','6',1],['D','A',1],['D','9',1],['D','5',1],['D','2',1]]
