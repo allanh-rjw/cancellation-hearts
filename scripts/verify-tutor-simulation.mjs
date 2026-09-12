@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import {SIMULATED_PERSONAS} from '../simulation/personas.mjs';
-import {runRegressionCorpus,runBatch} from '../simulation/harness.mjs';
+import {runRegressionCorpus,runPassingPacket,runAdvancedPacket,runAlternativePathwayPacket,runBatch} from '../simulation/harness.mjs';
 assert.ok(SIMULATED_PERSONAS.length>=8,'simulation needs at least eight meaningful learner personas');
 const regression=await runRegressionCorpus({seed:20260911,throwOnFailure:true});
 assert.equal(regression.source,'synthetic-simulation');
 assert.equal(regression.passed,true);
+const passing=await runPassingPacket({seed:20260911});
+const advanced=await runAdvancedPacket({seed:20260911});
+const alternatives=await runAlternativePathwayPacket({seed:20260911});
+assert.equal(alternatives.validAlternativeRejectionRate,0,'known strong or defensible alternative pathways must not be rejected');
+if(!passing.passed)throw new Error(`Passing packet failures: ${passing.failures.map(f=>f.signature).join(', ')}`);
+if(!advanced.passed)throw new Error(`Advanced packet failures: ${advanced.failures.map(f=>f.signature).join(', ')}`);
 const batch=await runBatch({learners:12,seed:20260911,hands:1});
 assert.equal(batch.source,'synthetic-simulation');
 assert.equal(batch.learners,12);
@@ -13,5 +19,5 @@ assert.equal(batch.isolation.learnerModelEligible,0,'synthetic assessment eviden
 assert.equal(batch.isolation.productionStateTouched,false,'simulation must not touch production learner state');
 assert.ok(Object.keys(batch.placement.matrix).length>=4,'small batch should exercise all declared learner levels');
 assert.ok(batch.evaluationMetrics.grounding.rate>=.95,'Tutor feedback should remain grounded to active hands');
-console.log(JSON.stringify({regressionCases:regression.cases,personas:SIMULATED_PERSONAS.length,placement:batch.placement,isolation:batch.isolation,failures:batch.failures.slice(0,5)},null,2));
+console.log(JSON.stringify({regressionCases:regression.cases,passingCases:passing.cases,advancedCases:advanced.cases,alternativeCases:alternatives.cases,validAlternativeRejectionRate:alternatives.validAlternativeRejectionRate,personas:SIMULATED_PERSONAS.length,placement:batch.placement,isolation:batch.isolation,failures:batch.failures.slice(0,5)},null,2));
 console.log('ME20-SIM Tutor behavior verification passed.');
