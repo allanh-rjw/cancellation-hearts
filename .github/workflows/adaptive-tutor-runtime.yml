@@ -42,6 +42,7 @@ jobs:
             adaptive-trainer/hearts-browser-integration.js
             hearts-response-completeness.js
             hearts-reasoning-evidence.js
+            hearts-pathway-consistency.js
             hearts-advanced-reasoning.js
             hearts-passing-reasoning.js
             tutor-passing-phase.js
