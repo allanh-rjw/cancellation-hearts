@@ -12,6 +12,7 @@ export const REGRESSION_CASES=Object.freeze([
  {id:'moon-terse-stop-is-not-enough',problemId:'guided-useful-void',stepId:'pivot',text:'Stop the moon.',expected:{mustNotAdvance:true,grounded:true}},
  {id:'preserve-queen-protection-unicode',problemId:'guided-queen-protection',stepId:'preserve',text:'I want to preserve 2♠ because it protects Q♠ through another spade round, plus a separate low exit such as 5♣ so I can surrender the lead later.',expected:{status:'correct',noRedundantQuestion:true,grounded:true}},
  {id:'preserve-queen-protection-card-names',problemId:'guided-queen-protection',stepId:'preserve',text:'I want to preserve 2 of spades because it protects the queen of spades through another spade round, plus a separate low exit such as 5 of clubs so I can surrender the lead later.',expected:{status:'correct',noRedundantQuestion:true,grounded:true}},
+ {id:'queen-protection-cards-card-names',problemId:'guided-queen-protection',stepId:'cards',text:'2 of spades and 9 of spades protect the queen of spades, so I want to preserve 2 of spades longest while shedding queen of clubs and 10 of diamonds before they promote into winners.',expected:{status:'correct',noRedundantQuestion:true,grounded:true}},
  {id:'targeting-conditional',problemId:'guided-useful-void',stepId:'target',text:'I would target a player only if they had demonstrated a void or exposed high cards and the score justified the risk; otherwise I would leave them alone.',expected:{status:'correct',grounded:true}}
 ]);
 export const ALTERNATIVE_PATHWAYS=Object.freeze([

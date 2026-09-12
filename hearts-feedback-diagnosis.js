@@ -4,7 +4,9 @@
   const original=adapter.evaluate.bind(adapter);
 
   function normalize(text){
+    const ranks={ace:'a',king:'k',queen:'q',jack:'j'},suits={clubs:'♣',diamonds:'♦',spades:'♠',hearts:'♥'};
     return String(text||'').toLowerCase()
+      .replace(/\b(ace|king|queen|jack|10|[2-9]) of (clubs|diamonds|spades|hearts)\b/g,(_,rank,suit)=>(ranks[rank]||rank)+suits[suit])
       .replace(/10h/g,'10♥').replace(/qh/g,'q♥').replace(/jh/g,'j♥')
       .replace(/qs/g,'q♠').replace(/as/g,'a♠').replace(/10s/g,'10♠').replace(/6s/g,'6♠').replace(/2s/g,'2♠').replace(/9s/g,'9♠')
       .replace(/kd/g,'k♦').replace(/jd/g,'j♦').replace(/10d/g,'10♦').replace(/7d/g,'7♦').replace(/6d/g,'6♦').replace(/4d/g,'4♦')
