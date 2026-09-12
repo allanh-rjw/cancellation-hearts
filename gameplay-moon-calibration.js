@@ -1,6 +1,7 @@
 // Empirical starting-hand calibration for Shoot-the-Moon practice.
 // Strength labels are represented by progressively weaker control structures,
-// not by hidden play-time probability bonuses.
+// not by hidden play-time probability bonuses. Two-player Ridiculous splits
+// control by point suit so both shooters have a natural scoring route.
 
 const baseDealPracticeRoundForCalibration=dealPracticeRound;
 dealPracticeRound=function(){
