@@ -20,18 +20,22 @@ export const ALTERNATIVE_PATHWAYS=Object.freeze([
  {id:'void-conditional-control',problemId:'guided-useful-void',stepId:'control',classification:'defensible',text:'If winning the lead lets me immediately lead a club and shorten the suit toward a useful void, I am willing to take control for that specific follow-up.'}
 ]);
 export const PASSING_SCENARIOS=Object.freeze([
- {id:'pass-high-cards-sensible',kind:'passing',description:'High-card shedding serves the pathway rather than merely reducing ranks.'},
- {id:'pass-damages-protection',kind:'passing',description:'Passing a protection card should be questioned when Q♠ remains exposed.'},
- {id:'useful-void',kind:'passing',description:'Creating a void is valuable only when it has a disposal job.'},
- {id:'shortest-not-useful',kind:'passing',description:'Shortest suit alone is insufficient justification.'},
- {id:'postpass-total-revision',kind:'passing',description:'Incoming cards can invalidate the original pathway.'},
- {id:'postpass-minimal-revision',kind:'passing',description:'Incoming cards can leave the original pathway mostly intact.'}
+ {id:'pass-pathway-sensible',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: KC, 8C, AS',expected:{status:'correct'}},
+ {id:'pass-high-cards-by-rank-only',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to pass KC, AS and JH because they are three high cards and high cards are bad. Then I will just play whatever is left. Pass cards: KC, AS, JH',expected:{mustNotAdvance:true}},
+ {id:'pass-damages-queen-protection',problemId:'guided-queen-protection',stepId:'prepass_pathway',text:'I want to pass 2S, 9S and 5C to make my hand lower and then get rid of other high cards later. Pass cards: 2S, 9S, 5C',expected:{mustNotAdvance:true}},
+ {id:'shortest-suit-not-enough',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to pass KC, 8C and 3C because clubs are shortest, so making a void there must be best. Then I will decide what to do. Pass cards: KC, 8C, 3C',expected:{mustNotAdvance:true}},
+ {id:'postpass-real-revision',problemId:'guided-useful-void',stepId:'postpass_pathway',text:'The incoming cards made spades more dangerous, so my first objective now is to stay off lead while I find a safer route to unload AS. I will preserve my low exits because I need them after the disposal succeeds.',expected:{status:'correct'}},
+ {id:'postpass-refuses-revision',problemId:'guided-useful-void',stepId:'postpass_pathway',text:'The incoming cards changed the hand, but I will use exactly the same plan regardless because I already chose it before the pass. I will keep my low cards.',expected:{mustNotAdvance:true}}
 ]);
 export const ADVANCED_SCENARIOS=Object.freeze([
- {id:'moon-evidence-before-action',stepId:'threat',description:'Require evidence before treating a moon as credible.'},
- {id:'moon-minimum-intervention',stepId:'pivot',description:'Break the moon with the least costly intervention.'},
- {id:'observe-before-target',stepId:'observe',description:'Seek demonstrated constraints before targeting.'},
- {id:'conditional-targeting',stepId:'target',description:'Target only when vulnerability and score payoff justify it.'},
- {id:'cancellation-safety',stepId:'target',description:'Cancellation can change who actually wins a loaded trick.'},
- {id:'carryover-jackpot',stepId:'threat',description:'Carried penalties can make intervention timing more urgent.'}
+ {id:'moon-premature-one-heart',problemId:'guided-useful-void',stepId:'threat',text:'As soon as anyone wins one heart trick, I assume they are shooting the moon and abandon my plan.',expected:{mustNotAdvance:true}},
+ {id:'moon-evidence-credible',problemId:'guided-useful-void',stepId:'threat',text:'I treat the moon as credible only if the same player keeps collecting penalty cards and still appears to control the lead across several tricks.',expected:{status:'correct'}},
+ {id:'moon-minimum-intervention',problemId:'guided-useful-void',stepId:'pivot',text:'I make the smallest intervention needed to put one penalty card on somebody else, then return to my original pathway instead of taking over the whole hand.',expected:{status:'correct'}},
+ {id:'moon-overreaction',problemId:'guided-useful-void',stepId:'pivot',text:'I would abandon my whole plan and try to take every remaining trick so the suspected moon shooter cannot win anything else.',expected:{mustNotAdvance:true}},
+ {id:'observe-before-target',problemId:'guided-useful-void',stepId:'observe',text:'Before targeting, I want to see a demonstrated void, exposed high cards, lost protection, or repeated forced wins that show the player is actually constrained.',expected:{status:'correct'}},
+ {id:'scoreboard-only-targeting',problemId:'guided-useful-void',stepId:'observe',text:'I only need the scoreboard. If someone has the most points, that alone tells me their hand is vulnerable.',expected:{mustNotAdvance:true}},
+ {id:'conditional-targeting',problemId:'guided-useful-void',stepId:'target',text:'I target only when a demonstrated void or exposed high cards make the pressure likely to work and the score payoff justifies the risk; otherwise I keep my own pathway.',expected:{status:'correct'}},
+ {id:'target-leader-without-evidence',problemId:'guided-useful-void',stepId:'target',text:'I always target whoever is leading the score even if I have no evidence about their cards.',expected:{mustNotAdvance:true}},
+ {id:'cancellation-evidence',problemId:'guided-useful-void',stepId:'observe',text:'I also want to see whether duplicate ranks have already appeared, because cancellation can change which high card is actually exposed or forced to win.',expected:{status:'correct'}},
+ {id:'carryover-urgency',problemId:'guided-useful-void',stepId:'threat',text:'If a large carried penalty pot is waiting and the same player still controls the lead, that raises the cost of waiting, so I would treat the threat as more urgent.',expected:{status:'correct'}}
 ]);
