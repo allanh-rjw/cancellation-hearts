@@ -33,6 +33,7 @@ export const PASSING_SCENARIOS=Object.freeze([
  {id:'pass-damages-queen-protection',problemId:'guided-queen-protection',stepId:'prepass_pathway',text:'I want to pass 2S, 9S and 5C to make my hand lower and then get rid of other high cards later. Pass cards: 2S, 9S, 5C',expected:{mustNotAdvance:true}},
  {id:'shortest-suit-not-enough',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to pass KC, 8C and 3C because clubs are shortest, so making a void there must be best. Then I will decide what to do. Pass cards: KC, 8C, 3C',expected:{mustNotAdvance:true}},
  {id:'postpass-real-revision',problemId:'guided-useful-void',stepId:'postpass_pathway',text:'The incoming cards made spades more dangerous, so my first objective now is to stay off lead while I find a safer route to unload AS. I will preserve my low exits because I need them after the disposal succeeds.',expected:{status:'correct'}},
+ {id:'postpass-direct-so-causal',problemId:'guided-useful-void',stepId:'postpass_pathway',text:'The incoming cards changed the hand shape, so my first objective is to stay off lead, shed the new liabilities, and preserve low exits.',expected:{status:'correct',noRedundantQuestion:true}},
  {id:'postpass-refuses-revision',problemId:'guided-useful-void',stepId:'postpass_pathway',text:'The incoming cards changed the hand, but I will use exactly the same plan regardless because I already chose it before the pass. I will keep my low cards.',expected:{mustNotAdvance:true}}
 ]);
 export const ADVANCED_SCENARIOS=Object.freeze([
