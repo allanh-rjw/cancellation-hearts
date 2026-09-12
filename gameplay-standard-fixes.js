@@ -133,6 +133,45 @@ playCard=function(playerIndex,card){
   else continueTurn();
 };
 
+// Canonical final-trick rule: when the led suit fully cancels and there is no
+// next trick to receive the carryover, the final-trick leader receives every
+// unresolved penalty point. That leader is also the most recent valid trick
+// winner under the ordinary carryover rule, so this preserves the existing
+// semantics without a retroactive history lookup.
+function gameplayFinalCancellationAward({leader,carryoverPoints,trickPoints}){
+  return {winner:leader,points:carryoverPoints+trickPoints};
+}
+
+const baseGameplayFinishTrick=finishTrick;
+finishTrick=function(){
+  const led=currentLedSuit();
+  const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
+  if(eligible.length||!gameplayAllHandsEmpty()){
+    return baseGameplayFinishTrick();
+  }
+
+  const trickPoints=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
+  const carried=state.carryoverPoints;
+  const {winner,points}=gameplayFinalCancellationAward({leader:state.leader,carryoverPoints:carried,trickPoints});
+  state.currentTrickAward={winner,points,carried,finalCancellation:true};
+  state.players[winner].roundPoints+=points;
+  state.players[winner].tricks.push(...state.carryoverCards,...state.trick.map(x=>x.card));
+  state.carryoverPoints=0;
+  state.carryoverCards=[];
+  renderTrickCoach();
+  state.trickNumber++;
+  state.phase='trick-end';
+  $('nextTrickBtn').classList.add('hidden');
+  setStatus(`The final trick's led suit cancelled completely. ${state.players[winner].name}, the final-trick leader, receives ${points} unresolved penalty point${points===1?'':'s'}.`);
+  renderAll();
+
+  if(state.mode==='practice'&&practiceShootBroken(winner,points)){
+    endBrokenPractice(winner,points);
+    return;
+  }
+  setTimeout(finishRound,350);
+};
+
 renderSeats=function(){
   if(!state.players.length) return;
   $('seatMap').innerHTML=state.players.map((p,i)=>{
