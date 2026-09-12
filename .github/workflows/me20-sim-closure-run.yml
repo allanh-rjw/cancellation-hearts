@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  preserve-fix:
-    if: github.event.head_commit.message == 'Run verified ME20 preserve fix'
+  card-normalization-fix:
+    if: github.event.head_commit.message == 'Run verified ME20 card normalization fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,14 +20,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply preserve diagnosis fix
-        run: python3 scripts/me20-preserve-fix.py
+      - name: Apply card-name normalization fix
+        run: python3 scripts/me20-card-normalize-fix.py
       - name: Run small ME20-SIM gate
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Commit verified preserve fix
+      - name: Commit verified normalization fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add hearts-feedback-diagnosis.js simulation/cases.mjs
-          git commit -m "Accept natural card names in preserve diagnosis"
+          git commit -m "Normalize natural card names in Tutor diagnosis"
           git push origin HEAD:fix/me20-sim-diagnostic-scored-records
