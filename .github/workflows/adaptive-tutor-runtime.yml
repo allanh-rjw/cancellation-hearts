@@ -51,6 +51,7 @@ jobs:
             tutor-level-progression.js
             causal-loader.js
             learning-gateway-runtime.js
+            gameplay-integrity.js
             simulation/contracts.mjs
             simulation/personas.mjs
             simulation/cases.mjs
@@ -61,6 +62,7 @@ jobs:
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
             scripts/verify-me21-standard-game.mjs
+            scripts/verify-me21-final-trick.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -80,5 +82,7 @@ jobs:
         run: node scripts/verify-browser-startup.mjs
       - name: Verify ME21 Standard Game production simulation
         run: node scripts/verify-me21-standard-game.mjs
+      - name: Verify ME21 final no-winner trick accounting
+        run: node scripts/verify-me21-final-trick.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
