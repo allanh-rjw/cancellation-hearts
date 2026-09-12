@@ -5,44 +5,39 @@ on:
     branches: [fix/me20-sim-diagnostic-scored-records]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  passing-objective-fix:
-    if: github.event.head_commit.message == 'Fix ME20-SIM passing objective matcher'
+  diagnose-preserve-listening:
+    if: github.event.head_commit.message == 'Diagnose ME20-SIM preserve listening residuals'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/me20-sim-diagnostic-scored-records
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix passing objective recognition and verify
+      - name: Print deterministic preserve learner texts and evaluator results
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          passing=Path('hearts-passing-reasoning.js')
-          text=passing.read_text()
-          old="const cards=selectedPassCards(text),pathway=/path|objective|goal|want to|trying to|avoid|protect|void|shed|dump|dispose|control|lead/.test(text),purpose=/because|so that|so i|in order|to create|to remove|to keep|preserv|protect|avoid|shed|dump|void/.test(text),future=/then|after|later|next|once|future|eventually/.test(text),job=strategicJob(text);"
-          new="const cards=selectedPassCards(text),pathway=/path|objective|goal|want (?:to|the|this)|trying to|avoid|protect|preserv|void|shed|dump|dispose|disposal|liabilit|control|lead/.test(text),purpose=/because|so that|so i|in order|to create|to remove|to keep|preserv|protect|avoid|shed|dump|void/.test(text),future=/then|after|later|next|once|future|eventually/.test(text),job=strategicJob(text);"
-          if old not in text: raise SystemExit('Expected passing pathway matcher not found')
-          passing.write_text(text.replace(old,new,1))
-
-          cases=Path('simulation/cases.mjs')
-          text=cases.read_text()
-          anchor=" {id:'pass-pathway-card-names',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: king of clubs, 8 of clubs, ace of spades',expected:{status:'correct'}},\n"
-          addition=anchor+" {id:'pass-pathway-objective-noun-phrase',problemId:'guided-queen-protection',stepId:'prepass_pathway',text:'I want the pass to reduce liabilities while preserving low exits, so that afterward I can build a useful disposal route and reassess. Pass cards: K♦, Q♣, Q♠',expected:{status:'correct'}},\n"
-          if anchor not in text: raise SystemExit('Expected passing scenario insertion point not found')
-          cases.write_text(text.replace(anchor,addition,1))
-          PY
-          node scripts/verify-tutor-simulation.mjs
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hearts-passing-reasoning.js simulation/cases.mjs
-          git commit -m "Recognize complete passing objectives in natural phrasing"
-          git push origin HEAD:fix/me20-sim-diagnostic-scored-records
+          node --input-type=module <<'NODE'
+          import {SIMULATED_PERSONAS} from './simulation/personas.mjs';
+          import {generateSimulatedResponse} from './simulation/generator.mjs';
+          import {runBatch,loadTutorStack} from './simulation/harness.mjs';
+          const batch=await runBatch({learners:12,seed:20260911,hands:1});
+          const stack=await loadTutorStack();
+          const problem=stack.adapter.problemForId('guided-queen-protection');
+          const rows=[];
+          for(let i=0;i<12;i++){
+            const j=batch.journeys[i];
+            if(j.placedLevel==='beginner')continue;
+            const persona=SIMULATED_PERSONAS[i%SIMULATED_PERSONAS.length];
+            const seed=20260911+i;
+            const sim=generateSimulatedResponse({persona,problem,stepId:'preserve',seed:seed*1000+6,previousAnswers:{}});
+            const evalResult=stack.adapter.evaluate({id:'preserve'},{text:sim.responseText,choice:sim.responseText},{exercise:problem},j.profile);
+            rows.push({i,personaId:persona.learnerId,placedLevel:j.placedLevel,responseClass:sim.expectedResponseClass,complete:sim.complete,text:sim.responseText,evalResult});
+          }
+          console.log('PRESERVE_ROWS='+JSON.stringify(rows,null,2));
+          console.log('LISTENING_FAILURES='+JSON.stringify(batch.failures.filter(f=>f.signature==='already-answered-question-repeated'),null,2));
+          NODE
