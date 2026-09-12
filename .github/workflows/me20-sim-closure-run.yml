@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 jobs:
-  residual-fixes:
-    if: github.event.head_commit.message == 'Fix ME20-SIM residual defects'
+  unicode-pass-fix:
+    if: github.event.head_commit.message == 'Fix ME20-SIM Unicode pass parsing'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,59 +19,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply focused simulator evaluator and production fixes
+      - name: Fix Unicode pass-card parsing and verify
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          generator=Path('simulation/generator.mjs')
-          text=generator.read_text()
-          new_good="""function goodText(stepId,problem,passCards){const hand=problem.hand||[],hasQS=hand.includes('QS'),queenProtection=hasQS&&hand.includes('2S'),usefulVoidClubs=hand.includes('KC')&&hand.includes('8C')&&hand.includes('3C'),lows=lowCards(hand).join(' and ');switch(stepId){case'objective':return hasQS?'I want to keep QS protected while shedding QH, 10H, QC and other future winners before they become forced winners, because preserving low spades gives QS another safe round.':'I want to create a useful disposal route for AS because it can become a forced winner, while preserving low exits so I can surrender control afterward.';case'control':return usefulVoidClubs?'I want to stay off lead because other players leading can help me shed clubs and liabilities. I would take control only when I can immediately use it to shorten clubs toward a disposal route for AS.':'I want to stay off lead because other players leading gives me chances to shed liabilities while I preserve protection. I would take control only when winning creates a named follow-up that advances the pathway.';case'cards':if(queenProtection)return'2S and 9S protect QS, so I want to preserve 2S longest while shedding QC, 10D, QH and 10H before they promote into winners.';if(usefulVoidClubs)return'I want to lose KC first, use 8C to keep shortening clubs, and preserve 3C until the last club so I can become void; then a later club lead gives me a disposal route for AS.';return'AS and JH are liabilities, while my lowest cards are exits I want to preserve because they can surrender the lead later.';case'next':return usefulVoidClubs?'Once I am void in clubs, I want the next club lead to let me unload AS first because it is the most dangerous future winner, then I want to get off lead again.':'Once I have shed an early liability while QS is still protected, I want to create a safe disposal opportunity for QS or a dangerous heart, then surrender the lead again.';case'preserve':if(queenProtection)return'I want to preserve 2S because it protects QS through another spade round, plus a separate low exit such as 5C so I can surrender the lead later.';if(usefulVoidClubs)return'I want to preserve 4D or 4H because after AS is gone those low cards can help me surrender the lead instead of getting trapped in control.';return`I want to preserve ${lows||'my lowest exits'} because the next phase depends on having a safe way to surrender control.`;case'prepass_pathway':return`I want the pass to reduce liabilities while preserving low exits, so that afterward I can build a useful disposal route and reassess. Pass cards: ${passCards.join(', ')}`;case'postpass_pathway':return'The incoming cards changed the hand shape, so I am reassessing rather than blindly keeping the old plan. My first objective now is to stay off lead while I shed the new liabilities, and I will preserve my lowest exits for the phase after that.';case'threat':return'I would treat a moon attempt as credible if one player keeps collecting hearts or QS across several tricks and still appears to control the lead. I would wait for that accumulating evidence before changing my plan.';case'pivot':return'I would make the minimum intervention needed to break the moon threat and then return to my original avoidance pathway so I preserve as much future choice as possible.';case'observe':return'Before targeting, I want to see a demonstrated void, exposed high cards, lost protection, repeated forced wins, or cancellation evidence that shows the player is actually vulnerable.';case'target':return'I would target a player only if their demonstrated void or exposed high cards make the play likely to work and the score justifies the risk; otherwise I would not target them.';default:return'I would choose the line that preserves future choice and revise it when the live card state changes.';}}"""
-          text,n=re.subn(r"function goodText\(stepId,problem,passCards\)\{.*?\}\nfunction incompleteText",new_good+"\nfunction incompleteText",text,count=1,flags=re.S)
-          if n!=1: raise SystemExit('Could not replace goodText')
-          old="let cls='clearly-correct';if(rng()<persona.contradictionRate)cls='contradictory';else if(rng()<persona.ambiguityRate)cls='ambiguous';else if(rng()<skill*.68)cls='clearly-correct';else if(skill>.72&&rng()<.18)cls='strategically-defensible-alternative';else if(rng()<.45)cls='incomplete';else cls='clearly-incorrect';"
-          new="let cls='clearly-correct';if(rng()<persona.contradictionRate)cls='contradictory';else if(rng()<persona.ambiguityRate)cls='ambiguous';else{const responseRoll=rng();if(responseRoll<skill)cls='clearly-correct';else if(skill>.72&&responseRoll<Math.min(1,skill+.06))cls='strategically-defensible-alternative';else if(responseRoll<Math.min(1,skill+.18))cls='incomplete';else cls='clearly-incorrect';}"
-          if old not in text: raise SystemExit('Could not find response-class selection')
-          text=text.replace(old,new,1)
-          old="text=applyLanguageVariation(text,persona,rng);return defineSimulatedResponse"
-          new="text=applyLanguageVariation(text,persona,rng);if(!explicit&&/\\b(because|since|so that|so i can|so i could|in order to|which lets|which allows|that way|therefore|then i can|to avoid|to keep|to make)\\b/i.test(text))explicit=true;return defineSimulatedResponse"
-          if old not in text: raise SystemExit('Could not find language-variation boundary')
-          generator.write_text(text.replace(old,new,1))
-
-          evaluator=Path('simulation/evaluator.mjs')
-          text=evaluator.read_text()
-          old="if(simulatedResponse&&!simulatedResponse.reasoningExplicit)checks.push(pass('inference-discipline',result?.diagnosticEvidence?.inferenceEligible===false||result?.pedagogicalDecision?.move==='clarify-reasoning','unstated reasoning must not become misconception evidence'));"
-          new="if(simulatedResponse&&!simulatedResponse.reasoningExplicit){const hypotheses=result?.diagnosticEvidence?.misconceptionHypotheses||[];checks.push(pass('inference-discipline',hypotheses.length===0||result?.diagnosticEvidence?.inferenceEligible===false,'unstated reasoning must not become misconception evidence'));}"
-          if old not in text: raise SystemExit('Could not find inference-discipline check')
-          text=text.replace(old,new,1)
-          old="const specific=/♣|♦|♠|♥|void|lead|control|winner|pass|moon|target|preserv|liabilit|intervention|pathway|original plan|evidence|exposed|risk|incoming|received/i.test(text);"
-          new="const specific=/♣|♦|♠|♥|clubs?|diamonds?|spades?|hearts?|void|lead|control|winner|pass|moon|target|preserv|liabilit|intervention|pathway|original plan|evidence|exposed|risk|incoming|received/i.test(text);"
-          if old not in text: raise SystemExit('Could not find specificity check')
-          evaluator.write_text(text.replace(old,new,1))
-
-          advanced=Path('hearts-advanced-reasoning.js')
-          text=advanced.read_text()
-          old="const minimal=/minimum|smallest|one heart|break|stop|intervene|only enough|without.*abandon|return.*plan|return.*path|preserv/.test(t),overreact=/every remaining trick|take every|win everything|abandon.*whole|abandon.*entire/.test(t);"
-          new="const minimal=/minimum|smallest|one heart|only enough|without.*abandon|return.*plan|return.*path|preserv|break.*(?:moon|threat).*(?:return|resume)|(?:return|resume).*(?:after|once).*break/.test(t),overreact=/every remaining trick|take every|win everything|abandon.*whole|abandon.*entire/.test(t);"
-          if old not in text: raise SystemExit('Could not find advanced pivot matcher')
-          advanced.write_text(text.replace(old,new,1))
+          passing=Path('hearts-passing-reasoning.js')
+          text=passing.read_text()
+          old="function selectedPassCards(text){const match=String(text||'').match(/pass cards:\\s*([^\\n]+)/i);return [...new Set(((match?.[1]||'').toUpperCase().match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}"
+          new="function selectedPassCards(text){const match=String(text||'').match(/pass cards:\\s*([^\\n]+)/i),normalized=(match?.[1]||'').toUpperCase().replace(/♣/g,'C').replace(/♦/g,'D').replace(/♠/g,'S').replace(/♥/g,'H');return [...new Set((normalized.match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}"
+          if old not in text: raise SystemExit('Expected pass-card parser not found')
+          passing.write_text(text.replace(old,new,1))
 
           cases=Path('simulation/cases.mjs')
           text=cases.read_text()
-          anchor=" {id:'moon-minimum-intervention',problemId:'guided-useful-void',stepId:'pivot',text:'If the moon threat becomes credible, I would make the smallest play needed to break it and then return to my original avoidance pathway.',expected:{status:'correct',grounded:true}},\n"
-          addition=anchor+" {id:'moon-terse-stop-is-not-enough',problemId:'guided-useful-void',stepId:'pivot',text:'Stop the moon.',expected:{mustNotAdvance:true,grounded:true}},\n"
-          if anchor not in text: raise SystemExit('Could not find regression insertion point')
+          anchor=" {id:'pass-pathway-sensible',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: KC, 8C, AS',expected:{status:'correct'}},\n"
+          addition=anchor+" {id:'pass-pathway-unicode-cards',problemId:'guided-useful-void',stepId:'prepass_pathway',text:'I want to reduce the cards most likely to trap me while keeping low exits, so that after the pass I can reassess suit shape and build a useful disposal route. Pass cards: K♣, 8♣, A♠',expected:{status:'correct'}},\n"
+          if anchor not in text: raise SystemExit('Expected passing scenario insertion point not found')
           cases.write_text(text.replace(anchor,addition,1))
-
-          readme=Path('simulation/README.md')
-          readme.write_text(readme.read_text().replace('node --experimental-default-type=module ','node '))
           PY
           node scripts/verify-tutor-simulation.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add simulation/generator.mjs simulation/evaluator.mjs hearts-advanced-reasoning.js simulation/cases.mjs simulation/README.md
-          git commit -m "Fix ME20-SIM response fidelity and evaluator residuals"
+          git add hearts-passing-reasoning.js simulation/cases.mjs
+          git commit -m "Accept Unicode cards in passing reasoning"
           git push origin HEAD:fix/me20-sim-diagnostic-scored-records
