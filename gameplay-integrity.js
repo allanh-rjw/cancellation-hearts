@@ -14,7 +14,7 @@
     // A no-winner trick normally carries its pot forward and retains the same
     // leader. On trick 13 there is no later trick, so resolve that retained pot
     // to the retained leader rather than stranding points outside hand scoring.
-    if(state.mode==='standard'&&state.trickNumber===12){
+    if(state.trickNumber===12){
       const led=currentLedSuit();
       const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
       if(!eligible.length){
@@ -32,6 +32,10 @@
         state.phase='trick-end';
         setStatus(`The led suit cancelled completely on the final trick. ${state.players[retainedLeader].name}, who retained the lead, collects the ${points} unresolved point${points===1?'':'s'}.`);
         renderAll();
+        if(state.mode==='practice' && practiceShootBroken(retainedLeader,points)){
+          endBrokenPractice(retainedLeader,points);
+          return;
+        }
         setTimeout(finishRound,350);
         return;
       }
@@ -44,9 +48,10 @@
     if(state.mode!=='practice') return originalFinishRound();
 
     const shooters=practiceShooters();
-    const shooterPoints=state.players.reduce((sum,p,i)=>sum+(shooters.has(i)?p.roundPoints:0),0);
-    const outsiderPoints=state.players.reduce((sum,p,i)=>sum+(shooters.has(i)?0:p.roundPoints),0);
-    const successfulMoon=shooterPoints===52&&outsiderPoints===0;
+    const scorers=state.players.map((p,i)=>({i,pts:p.roundPoints})).filter(x=>x.pts>0);
+    const successfulMoon=state.practiceType==='solo'
+      ? scorers.length===1 && scorers[0].i===0 && scorers[0].pts===52
+      : scorers.length===2 && scorers.every(x=>shooters.has(x.i)) && scorers.reduce((sum,x)=>sum+x.pts,0)===52;
     const startingRound=state.round;
     const startingDealer=state.dealer;
 
