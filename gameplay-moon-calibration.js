@@ -1,8 +1,8 @@
 // Empirical starting-hand calibration for Shoot-the-Moon practice.
 // Strength labels are represented by progressively weaker control structures,
 // not by hidden play-time probability bonuses. Two-player Ridiculous gives
-// both shooters a natural point-suit scoring route and is held to the same
-// monotonic calibration gate as the Solo ladder.
+// both shooters independent scoring routes and is held to the same monotonic
+// calibration gate as the Solo ladder.
 
 const baseDealPracticeRoundForCalibration=dealPracticeRound;
 dealPracticeRound=function(){
@@ -20,13 +20,13 @@ dealPracticeRound=function(){
   // stronger merely because one shooter can vacuum all 52 points; both must
   // have a credible route to a penalty trick for the two-player moon to count.
   const twoHuman={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['C','A',2],['D','A',2]],
+    ridiculous:[['H','A',2],['H','J',2],['H','9',2],['C','A',2],['D','A',2],['S','A',2],['S','K',1]],
     strong:[['H','A',2],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['S','K',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
     solid:[['H','A',1],['H','Q',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','Q',1],['D','A',1],['D','K',1],['D','Q',1]],
     marginal:[['H','A',1],['H','Q',1],['H','8',1],['S','A',1],['S','Q',1],['S','7',1],['C','A',1],['C','9',1],['C','5',1],['D','K',1],['D','8',1],['D','4',1],['D','3',1]]
   };
   const twoPartner={
-    ridiculous:[['S','A',2],['S','K',2],['S','Q',2],['S','J',2],['C','K',2],['D','K',2],['H','9',1]],
+    ridiculous:[['H','K',2],['H','Q',2],['H','10',2],['S','Q',2],['S','K',1],['C','K',2],['D','K',2]],
     strong:[['C','A',1],['C','K',1],['C','Q',2],['D','A',1],['D','K',1],['D','Q',2],['S','A',1],['S','K',1],['S','Q',1],['H','K',1],['H','Q',1]],
     solid:[['H','K',1],['H','J',1],['H','9',1],['H','7',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','J',1],['D','A',1],['D','K',1],['D','J',1]],
     marginal:[['H','K',1],['H','J',1],['H','7',1],['S','K',1],['S','Q',1],['S','6',1],['C','K',1],['C','10',1],['C','6',1],['D','A',1],['D','9',1],['D','5',1],['D','2',1]]
@@ -67,10 +67,10 @@ moonShooterForecast=function(playerIndex,card){
   const loaded=state.carryoverPoints+state.trick.reduce((n,x)=>n+cardPoints(x.card),0)+cardPoints(card);
   if(loaded>0){
     if(ownPoints===0&&otherPoints>0){
-      forecast.score+=(projected===playerIndex?70:-35);
+      forecast.score+=(projected===playerIndex?90:-45);
       forecast.notes.push(projected===playerIndex?'establishes the second required scorer':'misses the chance to establish the second required scorer');
     }else if(otherPoints===0&&ownPoints>0){
-      forecast.score+=(projected===other?60:projected===playerIndex?-35:0);
+      forecast.score+=(projected===other?80:projected===playerIndex?-50:0);
       forecast.notes.push(projected===other?'transfers a loaded trick to the zero-point partner':'the zero-point partner still needs a penalty trick');
     }
   }
