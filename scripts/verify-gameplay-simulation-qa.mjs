@@ -15,9 +15,13 @@ const timeoutNeedle="    const maxMs=scenario.mode==='standard'?18000:12000;";
 if(!source.includes(timeoutNeedle)) throw new Error('Scenario timeout hook changed');
 source=source.replace(timeoutNeedle,"    const maxMs=scenario.mode==='standard'?(scenario.targetHands>2?65000:18000):12000;");
 
+const standardSeedsNeedle="const seeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89];";
+if(!source.includes(standardSeedsNeedle)) throw new Error('Standard seed matrix hook changed');
+source=source.replace(standardSeedsNeedle,"const seeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+307,baseSeed+353,baseSeed+401,baseSeed+449];");
+
 const practiceMatrixNeedle="for(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of seeds.slice(0,3))scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1});";
 if(!source.includes(practiceMatrixNeedle)) throw new Error('Practice calibration matrix hook changed');
-source=source.replace(practiceMatrixNeedle,`const calibrationSeeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+131,baseSeed+173,baseSeed+211,baseSeed+257];\nfor(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of calibrationSeeds)scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1,calibration:true});`);
+source=source.replace(practiceMatrixNeedle,`const calibrationSeeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+131,baseSeed+173,baseSeed+211,baseSeed+257,baseSeed+307,baseSeed+353,baseSeed+401,baseSeed+449,baseSeed+503,baseSeed+557,baseSeed+613,baseSeed+673];\nfor(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of calibrationSeeds)scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1,calibration:true});`);
 
 const scenarioNeedle="scenarios.push({mode:'practice',practiceType:'solo',strength:'strong',difficulty:'expert',seed:baseSeed+703,width:1024,height:768,targetHands:1,openCoach:true});";
 if(!source.includes(scenarioNeedle)) throw new Error('Scenario matrix hook changed');
@@ -83,7 +87,7 @@ try{
       const key=`${r.practiceType}:${r.strength}`;
       const rows=groups.get(key)??[]; rows.push(r); groups.set(key,rows);
     }
-    console.log('\nQA practice calibration (8-seed cohorts only):');
+    console.log('\nQA practice calibration (16-seed cohorts only):');
     for(const [key,rows] of [...groups.entries()].sort()){
       const breaks=rows.filter(r=>r.practiceEnded&&!r.practiceSuccess&&r.completedHands===0&&Number.isFinite(r.finalTrickNumber));
       const avg=breaks.length?breaks.reduce((n,r)=>n+r.finalTrickNumber,0)/breaks.length:null;
