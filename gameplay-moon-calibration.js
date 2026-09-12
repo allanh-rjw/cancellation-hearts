@@ -16,19 +16,20 @@ dealPracticeRound=function(){
     marginal:[['C','A',1],['C','K',1],['C','7',1],['D','A',1],['D','K',1],['D','8',1],['S','A',1],['S','Q',1],['S','5',1],['H','A',1],['H','K',1],['H','Q',1],['H','J',1]]
   };
 
-  // Two-player Ridiculous uses complementary control instead of simply
-  // concentrating more honors in one shooter. The human owns a long protected
-  // heart chain plus both club aces and a low diamond handoff; Partner owns
-  // protected controls in the three non-heart suits. This gives both shooters
-  // an explicit way to transfer control to the zero-point teammate.
+  // Ridiculous two-player hands establish both shooters naturally rather than
+  // forcing a low-card transfer. The human owns the protected heart chain plus
+  // both club/diamond aces. Partner owns protected A-K-Q spade control, so the
+  // two Q♠ cards are a built-in 26-point Partner scoring route, plus secondary
+  // club/diamond controls for collecting dumped hearts without exposing an
+  // outsider. Strong/Solid/Marginal remain unchanged.
   const twoHuman={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['H','9',1],['C','A',2],['D','2',1]],
+    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['C','A',2],['D','A',2]],
     strong:[['H','A',2],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['S','K',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
     solid:[['H','A',1],['H','Q',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','Q',1],['D','A',1],['D','K',1],['D','Q',1]],
     marginal:[['H','A',1],['H','Q',1],['H','8',1],['S','A',1],['S','Q',1],['S','7',1],['C','A',1],['C','9',1],['C','5',1],['D','K',1],['D','8',1],['D','4',1],['D','3',1]]
   };
   const twoPartner={
-    ridiculous:[['C','K',2],['C','Q',2],['D','A',2],['D','K',2],['S','A',2],['S','K',2],['H','7',1]],
+    ridiculous:[['S','A',2],['S','K',2],['S','Q',2],['D','K',2],['D','Q',2],['C','K',2],['H','7',1]],
     strong:[['C','A',1],['C','K',1],['C','Q',2],['D','A',1],['D','K',1],['D','Q',2],['S','A',1],['S','K',1],['S','Q',1],['H','K',1],['H','Q',1]],
     solid:[['H','K',1],['H','J',1],['H','9',1],['H','7',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','J',1],['D','A',1],['D','K',1],['D','J',1]],
     marginal:[['H','K',1],['H','J',1],['H','7',1],['S','K',1],['S','Q',1],['S','6',1],['C','K',1],['C','10',1],['C','6',1],['D','A',1],['D','9',1],['D','5',1],['D','2',1]]
@@ -54,36 +55,17 @@ dealPracticeRound=function(){
 
 // A two-player moon requires both members of the pair to become actual
 // collectors. Once one member has scored and the other has not, loaded tricks
-// should preferentially establish the zero-point member rather than allowing
-// one player to accidentally complete a solo moon. Ridiculous also prefers a
-// safe empty-trick handoff before the next points arrive.
+// should preferentially establish the zero-point member. Do not force empty-
+// trick lead transfers; the Ridiculous hand itself supplies safe scoring routes.
 const baseMoonShooterForecastForPairBalance=moonShooterForecast;
 moonShooterForecast=function(playerIndex,card){
   const forecast=baseMoonShooterForecastForPairBalance(playerIndex,card);
-  if(state.mode!=='practice'||state.practiceType!=='two') return forecast;
+  if(state.mode!=='practice'||state.practiceType!=='two'||state.trick.length===0) return forecast;
   const shooters=practiceShooters();
   if(!shooters.has(playerIndex)) return forecast;
   const other=playerIndex===0?state.partnerIndex:0;
   const ownPoints=state.players[playerIndex]?.roundPoints||0;
   const otherPoints=state.players[other]?.roundPoints||0;
-
-  if(state.trick.length===0){
-    if(state.practiceStrength==='ridiculous'&&ownPoints>0&&otherPoints===0){
-      const takeover=state.players[other]?.hand
-        .filter(c=>c.suit===card.suit&&RANK_VALUE[c.rank]>RANK_VALUE[card.rank])
-        .sort((a,b)=>RANK_VALUE[b.rank]-RANK_VALUE[a.rank])
-        .find(c=>moonOutsideCount(other,c.suit,c.rank)===0);
-      if(takeover){
-        forecast.score+=110;
-        forecast.notes.push(`creates a protected handoff to the zero-point teammate via ${card.suit}`);
-      }else{
-        forecast.score-=25;
-        forecast.notes.push('does not create the needed control handoff to the zero-point teammate');
-      }
-    }
-    return forecast;
-  }
-
   const projected=currentWinningPlayerIfPlayed(card,playerIndex);
   const loaded=state.carryoverPoints+state.trick.reduce((n,x)=>n+cardPoints(x.card),0)+cardPoints(card);
   if(loaded>0){
@@ -94,9 +76,6 @@ moonShooterForecast=function(playerIndex,card){
       forecast.score+=(projected===other?80:projected===playerIndex?-50:0);
       forecast.notes.push(projected===other?'transfers a loaded trick to the zero-point partner':'the zero-point partner still needs a penalty trick');
     }
-  }else if(state.practiceStrength==='ridiculous'&&ownPoints>0&&otherPoints===0){
-    forecast.score+=(projected===other?70:projected===playerIndex?-30:0);
-    if(projected===other) forecast.notes.push('hands control to the zero-point teammate before the next loaded trick');
   }
   return forecast;
 };
