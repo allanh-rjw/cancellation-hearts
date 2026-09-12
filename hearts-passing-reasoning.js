@@ -3,48 +3,30 @@
   if(!adapter||adapter.__me20PassingInstalled)return;
   const originalSelect=adapter.selectExercise.bind(adapter);
   const originalEvaluate=adapter.evaluate.bind(adapter);
-  const PASS_PROMPTS={
-    prepass_pathway:{question:'Before you pass, what pathway do you want this hand to follow? Choose exactly three cards to pass and explain what those cards are meant to change, remove, or preserve.',fallback:[]},
-    postpass_pathway:{question:'Now that you have seen the three incoming cards, how should your pathway change? Identify what became safer or more dangerous, what your first objective is now, and what cards you need to preserve.',fallback:[]}
-  };
-  const SKILLS={
-    prepass_pathway:['hearts.passing_reasoning','causal_planning.state_transition','causal_planning.preservation'],
-    postpass_pathway:['hearts.pathway_revision','causal_planning.contingency_revision','causal_planning.preservation']
-  };
+  const PASS_PROMPTS={prepass_pathway:{question:'Before you pass, what pathway do you want this hand to follow? Choose exactly three cards to pass and explain what those cards are meant to change, remove, or preserve.',fallback:[]},postpass_pathway:{question:'Now that you have seen the three incoming cards, how should your pathway change? Identify what became safer or more dangerous, what your first objective is now, and what cards you need to preserve.',fallback:[]}};
+  const SKILLS={prepass_pathway:['hearts.passing_reasoning','causal_planning.state_transition','causal_planning.preservation'],postpass_pathway:['hearts.pathway_revision','causal_planning.contingency_revision','causal_planning.preservation']};
   function txt(response){return String(response?.text||response?.choice||'').toLowerCase();}
   function selectedPassCards(text){const match=String(text||'').match(/pass cards:\s*([^\n]+)/i);return [...new Set(((match?.[1]||'').toUpperCase().match(/(?:10|[2-9JQKA])[CDSH]/g)||[]))];}
-  function preDiagnosis(text){
-    const cards=selectedPassCards(text);
-    const pathway=/path|objective|goal|want to|trying to|avoid|protect|void|shed|dump|dispose|control|lead/.test(text);
-    const purpose=/because|so that|so i|in order|to create|to remove|to keep|preserv|protect|avoid|shed|dump|void/.test(text);
-    const future=/then|after|later|next|once|future|eventually/.test(text);
-    if(cards.length===3&&pathway&&purpose&&future)return {correct:'You selected three cards and connected the pass to a multi-step hand pathway rather than treating the pass as simple card disposal.'};
-    const missing=[];
-    if(cards.length!==3)missing.push('Choose exactly three cards to pass.');
-    if(!pathway)missing.push('State the hand-level objective you want the pass to support.');
-    if(!purpose)missing.push('Explain what the three-card pass is meant to change or preserve.');
-    if(!future)missing.push('Connect the pass to what you expect to do afterward.');
+  function strategicJob(text){return /(protect|preserv|exit|disposal|route|future winner|forced winner|void.*(?:dump|discard|unload|lose)|(?:dump|discard|unload|lose).*void|control.*(?:follow|purpose)|stay off lead|surrender.*lead|shape|suit length|liabilit)/.test(text);}
+  function rankOnly(text){return /(high cards? (?:are|is) bad|because (?:they(?:'re| are) )?high|three highest.*(?:because|since).*high|pass.*high.*just because)/.test(text);}
+  function shortestOnly(text){return /(shortest.*(?:must|always).*best|shortest suit.*(?:best|automatically)|because .*short(?:est)?.*so .*void|clubs are shortest.*must)/.test(text);}
+  function destroysQueenProtection(cards,context){const hand=context?.exercise?.hand||[];return hand.includes('QS')&&!cards.includes('QS')&&cards.includes('2S')&&cards.includes('9S');}
+  function preDiagnosis(text,context){
+    const cards=selectedPassCards(text),pathway=/path|objective|goal|want to|trying to|avoid|protect|void|shed|dump|dispose|control|lead/.test(text),purpose=/because|so that|so i|in order|to create|to remove|to keep|preserv|protect|avoid|shed|dump|void/.test(text),future=/then|after|later|next|once|future|eventually/.test(text),job=strategicJob(text);
+    if(cards.length===3&&rankOnly(text)&&!job)return {recognized:'You chose three definite cards to pass.',incorrect:'High rank by itself is not a complete passing strategy. A high card can still have a useful job, while a lower card can be essential protection or an exit.',missing:'Tie each pass choice to the hand you are trying to create.',nextQuestion:'What future state does this pass create, and which useful cards or exits are you deliberately preserving?'};
+    if(cards.length===3&&shortestOnly(text)&&!/(disposal|dump|discard|unload|future winner|forced winner)/.test(text))return {recognized:'You noticed that the pass can change suit length.',incorrect:'Making the shortest suit disappear is not automatically useful. A void needs a job.',missing:'Name the liability the void is supposed to help you dispose of or the control problem it solves.',nextQuestion:'What specific dangerous card would this void let you unload later?'};
+    if(cards.length===3&&destroysQueenProtection(cards,context))return {recognized:'You chose a pass that sharply shortens spades.',incorrect:'Passing both 2♠ and 9♠ while keeping Q♠ removes the protection underneath the queen and can turn it into an exposed penalty liability.',missing:'Account for Q♠ protection before using the pass to reshape the hand.',nextQuestion:'If Q♠ stays in your hand, which low spade protection do you need to preserve?'};
+    if(cards.length===3&&pathway&&purpose&&future&&job)return {correct:'You selected three cards and connected the pass to a multi-step hand pathway rather than treating the pass as simple card disposal.'};
+    const missing=[];if(cards.length!==3)missing.push('Choose exactly three cards to pass.');if(!pathway)missing.push('State the hand-level objective you want the pass to support.');if(!purpose||!job)missing.push('Explain the strategic job of the pass: what liability, protection, exit, suit shape, or future disposal route it changes.');if(!future)missing.push('Connect the pass to what you expect to do afterward.');
     return {recognized:cards.length===3?'You have made a definite three-card pass choice.':'You are beginning to frame the pass.',missing:missing.join(' '),nextQuestion:cards.length===3?'What future position does this exact three-card pass help you create?':'Which exact three cards would you pass, and what job does each choice serve?'};
   }
   function postDiagnosis(text){
-    const change=/change|changed|now|incoming|received|new|safer|danger|worse|better|still/.test(text);
-    const objective=/first objective|objective|goal|want to|need to|shed|dump|dispose|protect|void|control|lead/.test(text);
-    const preserve=/preserv|keep|save|protect|hold/.test(text);
-    const causal=/because|so that|so i|therefore|which means|then|after|now that/.test(text);
+    const change=/change|changed|now|incoming|received|new|safer|danger|worse|better|still/.test(text),objective=/first objective|objective|goal|want to|need to|shed|dump|dispose|protect|void|control|lead/.test(text),preserve=/preserv|keep|save|protect|hold/.test(text),causal=/because|so that|so i|therefore|which means|then|after|now that/.test(text),refuses=/same plan regardless|exactly the same plan|does not matter|don't care what|do not care what/.test(text);
+    if(refuses)return {recognized:'You noticed that the hand changed after the pass.',incorrect:'A post-pass pathway cannot be declared unchanged regardless of the incoming cards. The new cards can alter liabilities, protection, suit shape, and control.',missing:'Re-evaluate at least one concrete feature of the new hand before deciding whether the original pathway still survives.',nextQuestion:'What became safer or more dangerous after the incoming cards, and does that change your first objective?'};
     if(change&&objective&&preserve&&causal)return {correct:'You revised the pathway using the post-pass hand, including what changed, the new first objective, and what still needs to be preserved.'};
-    const missing=[];
-    if(!change)missing.push('Identify at least one way the incoming cards changed the hand.');
-    if(!objective)missing.push('Name the first objective for the new hand.');
-    if(!preserve)missing.push('Name what must now be preserved for the next phase.');
-    if(!causal)missing.push('Explain why the new hand changes or confirms the original pathway.');
-    return {recognized:'You are reassessing the hand after the pass.',missing:missing.join(' '),nextQuestion:'What specifically changed because of the incoming cards, and how does that alter your first objective?'};
+    const missing=[];if(!change)missing.push('Identify at least one way the incoming cards changed the hand.');if(!objective)missing.push('Name the first objective for the new hand.');if(!preserve)missing.push('Name what must now be preserved for the next phase.');if(!causal)missing.push('Explain why the new hand changes or confirms the original pathway.');return {recognized:'You are reassessing the hand after the pass.',missing:missing.join(' '),nextQuestion:'What specifically changed because of the incoming cards, and how does that alter your first objective?'};
   }
   adapter.selectExercise=function(profile){const ex=originalSelect(profile);return {...ex,prompts:{...(ex.prompts||{}),...PASS_PROMPTS}};};
-  adapter.evaluate=function(step,response,context,profile){
-    if(!PASS_PROMPTS[step?.id])return originalEvaluate(step,response,context,profile);
-    const text=txt(response),d=step.id==='prepass_pathway'?preDiagnosis(text):postDiagnosis(text);
-    const complete=Boolean(d.correct&&!d.missing&&!d.nextQuestion);
-    return {score:complete?0.9:0.58,skills:SKILLS[step.id],flags:[],gradeable:true,diagnosis:d};
-  };
+  adapter.evaluate=function(step,response,context,profile){if(!PASS_PROMPTS[step?.id])return originalEvaluate(step,response,context,profile);const text=txt(response),d=step.id==='prepass_pathway'?preDiagnosis(text,context):postDiagnosis(text);const complete=Boolean(d.correct&&!d.missing&&!d.nextQuestion);return {score:complete?0.9:d.incorrect?0.35:0.58,skills:SKILLS[step.id],flags:d.incorrect?['strategic-passing-error']:[],gradeable:true,diagnosis:d};};
   adapter.__me20PassingInstalled=true;
 })();
