@@ -1,29 +1,17 @@
 from pathlib import Path
 
-coaching = Path('tutor-situational-coaching.js')
-text = coaching.read_text()
-anchor = """      if(step.id==='cards'&&/2♠|9♠/.test(t)&&!explicitReason){
-        d.correct='2♠ and 9♠ are relevant because they sit underneath Q♠.';
-        d.ambiguous='I do not yet know which one you intend to preserve longer and why.';
-        d.nextQuestion='What job does 2♠ have that makes it more valuable to keep while Q♠ is still in your hand?';
-        result.gradeable=false;
-      }
-"""
-addition = anchor + """      if(step.id==='preserve'&&/(?:2♠|2 of spades)/.test(t)&&/(?:5♣|5 of clubs|low exit|separate low)/.test(t)&&explicitReason){
-        d.correct='You identified both kinds of cards that need to be preserved: 2♠ as protection under Q♠ and a separate low exit for surrendering the lead later.';
-        delete d.ambiguous;
-        delete d.nextQuestion;
-        result.gradeable=true;
-      }
-"""
-if anchor not in text:
-    raise SystemExit('Expected queen-protection cards block not found')
-text = text.replace(anchor, addition, 1)
-old = "if(step.id==='preserve'&&/4♦|4♥/.test(t)){"
-new = "if(step.id==='preserve'&&/(?:4♦|4♥|4 of diamonds|4 of hearts)/.test(t)){"
+diagnosis = Path('hearts-feedback-diagnosis.js')
+text = diagnosis.read_text()
+old = "const preservesProtection=has(t,/(2♠|protect.*q♠|q♠.*protect)/);\n      const mentionsLow=has(t,/(5♣|6♦|6♥|7♥|low club|low diamond|low heart|low card)/);"
+new = "const preservesProtection=has(t,/(2♠|2 of spades|protect.*(?:q♠|queen of spades)|(?:q♠|queen of spades).*protect)/);\n      const mentionsLow=has(t,/(5♣|5 of clubs|6♦|6 of diamonds|6♥|6 of hearts|7♥|7 of hearts|low club|low diamond|low heart|low card|low exit)/);"
 if old not in text:
-    raise SystemExit('Expected useful-void preserve matcher not found')
-coaching.write_text(text.replace(old, new, 1))
+    raise SystemExit('Expected queen-protection preserve diagnosis not found')
+text = text.replace(old, new, 1)
+old = "const namesLow=has(t,/(4♦|4♥|2♠|low card|low diamond|low heart)/);"
+new = "const namesLow=has(t,/(4♦|4 of diamonds|4♥|4 of hearts|2♠|2 of spades|low card|low diamond|low heart|low exit)/);"
+if old not in text:
+    raise SystemExit('Expected useful-void preserve diagnosis not found')
+diagnosis.write_text(text.replace(old, new, 1))
 
 cases = Path('simulation/cases.mjs')
 text = cases.read_text()
