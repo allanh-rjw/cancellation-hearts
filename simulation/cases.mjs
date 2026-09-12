@@ -9,6 +9,7 @@ export const REGRESSION_CASES=Object.freeze([
  {id:'contradiction-control',problemId:'guided-queen-protection',stepId:'control',text:'I want to stay off lead, but my immediate objective is to take control now even though I do not have a follow-up.',expected:{mustNotAdvance:true,grounded:true}},
  {id:'defensible-alternative',problemId:'guided-queen-protection',stepId:'control',text:'I would normally stay off lead, but if Q clubs is already gone and 5 clubs is my last club, I would allow K diamonds to win so I can lead 5 clubs and create a disposal route.',expected:{mustNotReject:true,grounded:true}},
  {id:'moon-minimum-intervention',problemId:'guided-useful-void',stepId:'pivot',text:'If the moon threat becomes credible, I would make the smallest play needed to break it and then return to my original avoidance pathway.',expected:{status:'correct',grounded:true}},
+ {id:'moon-terse-stop-is-not-enough',problemId:'guided-useful-void',stepId:'pivot',text:'Stop the moon.',expected:{mustNotAdvance:true,grounded:true}},
  {id:'targeting-conditional',problemId:'guided-useful-void',stepId:'target',text:'I would target a player only if they had demonstrated a void or exposed high cards and the score justified the risk; otherwise I would leave them alone.',expected:{status:'correct',grounded:true}}
 ]);
 export const ALTERNATIVE_PATHWAYS=Object.freeze([
