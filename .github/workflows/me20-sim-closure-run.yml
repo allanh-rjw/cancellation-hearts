@@ -5,62 +5,56 @@ on:
     branches: [fix/me20-sim-diagnostic-scored-records]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  closure-run:
-    if: github.event.head_commit.message == 'Retry ME20-SIM closure runner'
+  residual-diagnosis:
+    if: github.event.head_commit.message == 'Diagnose ME20-SIM residuals'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/me20-sim-diagnostic-scored-records
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix diagnostic scored-record flow
+      - name: Diagnose placement and inference residuals
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          harness = Path('simulation/harness.mjs')
-          text = harness.read_text()
-          old = "const responses=[],evidence=[],safeEvidence=[];let phaseSeed=seed;"
-          new = "const responses=[],evidence=[],safeEvidence=[],scoredRecords=[];let phaseSeed=seed;"
-          if old not in text:
-              raise SystemExit('Expected diagnostic collection declaration not found')
-          text = text.replace(old, new, 1)
-
-          old = "evidence.push(recorded.evidence);safeEvidence.push(sanitizeSyntheticAssessmentEvidence(recorded.evidence));}\n const assessmentResult=s.assessment.result({session,evidence}),placement=s.diagnostic.scorePlacement(evidence,assessmentResult);"
-          new = "evidence.push(recorded.evidence);safeEvidence.push(sanitizeSyntheticAssessmentEvidence(recorded.evidence));scoredRecords.push(recorded.scored);}\n const richScoredRecords=scoredRecords.filter(record=>Array.isArray(record?.normalizedResponse?.phaseScores)&&record.normalizedResponse.phaseScores.length>0);if(scoredRecords.length!==built.selection.selected.length||richScoredRecords.length!==scoredRecords.length)throw new Error('ME20-SIM diagnostic placement lost rich scored phase records');const assessmentResult=s.assessment.result({session,evidence}),placement=s.diagnostic.scorePlacement(evidence,assessmentResult,scoredRecords);"
-          if old not in text:
-              raise SystemExit('Expected diagnostic placement call not found')
-          text = text.replace(old, new, 1)
-          harness.write_text(text)
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add simulation/harness.mjs
-          git commit -m "Fix ME20-SIM diagnostic scored-record flow"
-          git push origin HEAD:fix/me20-sim-diagnostic-scored-records
-      - name: Run small ME20-SIM gate
-        run: node scripts/verify-tutor-simulation.mjs
-      - name: Run canonical 100-learner ME20-SIM batch
-        run: |
-          node simulation/cli.mjs \
-            --mode batch \
-            --learners 100 \
-            --hands 2 \
-            --seed 20260911 \
-            --write-report
-      - name: Print canonical closure summary
-        if: always()
-        shell: bash
-        run: |
-          if [ -f simulation/results/latest.md ]; then
-            echo '===== simulation/results/latest.md ====='
-            cat simulation/results/latest.md
-          fi
+          node --input-type=module <<'NODE'
+          import {runBatch} from './simulation/harness.mjs';
+          const batch=await runBatch({learners:100,seed:20260911,hands:2});
+          const firstByPersona=new Map();
+          for(const journey of batch.journeys){
+            if(!firstByPersona.has(journey.personaId))firstByPersona.set(journey.personaId,journey);
+          }
+          const diagnosticSamples=[...firstByPersona.values()].map(j=>({
+            personaId:j.personaId,
+            trueLevel:j.trueLevel,
+            placedLevel:j.placedLevel,
+            total:j.diagnostic.placement.total,
+            ratings:j.diagnostic.placement.ratings,
+            handScores:j.diagnostic.placement.handScores
+          }));
+          const inferenceFailures=batch.journeys.flatMap(j=>(j.evaluations||[])
+            .filter(e=>e.failures?.some(f=>f.dimension==='inference-discipline'))
+            .map(e=>({
+              personaId:j.personaId,
+              trueLevel:j.trueLevel,
+              caseId:e.caseId,
+              stepId:e.stepId,
+              responseClass:e.responseClass,
+              move:e.move,
+              coachText:e.text,
+              failures:e.failures.filter(f=>f.dimension==='inference-discipline')
+            })));
+          const listeningFailures=batch.journeys.flatMap(j=>(j.evaluations||[])
+            .filter(e=>e.failures?.some(f=>f.dimension==='listening'))
+            .slice(0,2)
+            .map(e=>({personaId:j.personaId,caseId:e.caseId,stepId:e.stepId,responseClass:e.responseClass,move:e.move,coachText:e.text})));
+          const specificityFailures=batch.journeys.flatMap(j=>(j.evaluations||[])
+            .filter(e=>e.failures?.some(f=>f.dimension==='specificity'))
+            .slice(0,2)
+            .map(e=>({personaId:j.personaId,caseId:e.caseId,stepId:e.stepId,responseClass:e.responseClass,move:e.move,coachText:e.text})));
+          console.log('ME20_RESIDUAL_DIAG='+JSON.stringify({diagnosticSamples,inferenceFailures,listeningFailures,specificityFailures},null,2));
+          NODE
