@@ -91,6 +91,7 @@
     loadStyle('tutor-diagnostic.css');
     await loadScript('hearts-tutor-adapter.js');
     await loadScript('hearts-feedback-diagnosis.js');
+    await loadScript('hearts-pathway-consistency.js');
     await loadScript('hearts-response-completeness.js');
     await loadScript('hearts-reasoning-evidence.js');
     await loadScript('hearts-advanced-reasoning.js');
@@ -109,7 +110,7 @@
     ]);
     await loadAsyncTutorUI();
     window.__adaptiveTutorLoaded=true;
-    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing/lazy-tutor-core-v1';
+    window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing+consistency/lazy-tutor-core-v1';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
