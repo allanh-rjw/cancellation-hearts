@@ -55,8 +55,8 @@
     }
 
     if(id==='preserve'){
-      const preservesProtection=has(t,/(2♠|protect.*q♠|q♠.*protect)/);
-      const mentionsLow=has(t,/(5♣|6♦|6♥|7♥|low club|low diamond|low heart|low card)/);
+      const preservesProtection=has(t,/(2♠|2 of spades|protect.*(?:q♠|queen of spades)|(?:q♠|queen of spades).*protect)/);
+      const mentionsLow=has(t,/(5♣|5 of clubs|6♦|6 of diamonds|6♥|6 of hearts|7♥|7 of hearts|low club|low diamond|low heart|low card|low exit)/);
       const statesExitJob=has(t,/(exit|get off lead|lose.*lead|surrender.*lead|later loser)/);
       const namesExit=mentionsLow&&statesExitJob;
       if(preservesProtection&&namesExit)return done('You answered both parts: 2♠ must be preserved while Q♠ still depends on it, and you also identified a low card to keep as a later way to surrender the lead.');
@@ -106,7 +106,7 @@
     }
 
     if(id==='preserve'){
-      const namesLow=has(t,/(4♦|4♥|2♠|low card|low diamond|low heart)/);
+      const namesLow=has(t,/(4♦|4 of diamonds|4♥|4 of hearts|2♠|2 of spades|low card|low diamond|low heart|low exit)/);
       const statesJob=has(t,/(exit|get off lead|surrender.*lead|lose.*lead|avoid.*control|stay off lead|later loser)/);
       if(namesLow&&statesJob)return done('You answered both parts: you identified a low card worth preserving and explained its later job as an exit or a way to avoid being trapped on lead.');
       if(namesLow)return {recognized:'You picked a sensible low card to preserve.',missing:'The other part is the later job you are saving it for.',nextQuestion:'After A♠ is gone, how could that low card help you surrender the lead?'};
