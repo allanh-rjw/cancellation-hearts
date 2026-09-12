@@ -10,6 +10,8 @@ const advanced=await runAdvancedPacket({seed:20260911});
 const alternatives=await runAlternativePathwayPacket({seed:20260911});
 const rejectedAlternatives=alternatives.evaluations.filter(e=>['strong','defensible'].includes(e.classification)&&e.failures.some(f=>f.dimension==='valid-alternative-acceptance')).map(e=>({id:e.caseId,classification:e.classification,result:e.result,failures:e.failures}));
 if(rejectedAlternatives.length)console.error('Rejected defensible alternatives:',JSON.stringify(rejectedAlternatives,null,2));
+if(!passing.passed)console.error('Passing packet failures:',JSON.stringify(passing.evaluations.filter(e=>!e.passed).map(e=>({id:e.caseId,result:e.result,failures:e.failures,text:e.text})),null,2));
+if(!advanced.passed)console.error('Advanced packet failures:',JSON.stringify(advanced.evaluations.filter(e=>!e.passed).map(e=>({id:e.caseId,result:e.result,failures:e.failures,text:e.text})),null,2));
 assert.equal(alternatives.validAlternativeRejectionRate,0,'known strong or defensible alternative pathways must not be rejected');
 if(!passing.passed)throw new Error(`Passing packet failures: ${passing.failures.map(f=>f.signature).join(', ')}`);
 if(!advanced.passed)throw new Error(`Advanced packet failures: ${advanced.failures.map(f=>f.signature).join(', ')}`);
