@@ -19,6 +19,9 @@ jobs:
           set -euo pipefail
           files=(
             app.js
+            gameplay-standard-fixes.js
+            gameplay-moon-fixes.js
+            gameplay-moon-calibration.js
             adaptive-trainer/contracts/contract-utils.js
             adaptive-trainer/contracts/item-contracts.js
             adaptive-trainer/contracts/evidence-contracts.js
@@ -60,6 +63,9 @@ jobs:
             simulation/report.mjs
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
+            scripts/verify-gameplay-simulation.mjs
+            scripts/verify-gameplay-simulation-qa.mjs
+            scripts/qa-gameplay-runtime-patch.js
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -79,3 +85,5 @@ jobs:
         run: node scripts/verify-browser-startup.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
+      - name: Run deterministic standard and moon-practice gameplay simulations
+        run: node scripts/verify-gameplay-simulation-qa.mjs
