@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  final-listening-fixes:
-    if: github.event.head_commit.message == 'Run final ME20 listening verification'
+  postpass-fix:
+    if: github.event.head_commit.message == 'Run ME20 post-pass simulator verification'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,16 +20,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply final listening fixes
-        run: python3 scripts/me20-final-listening-fix.py
+      - name: Apply post-pass simulator fix
+        run: python3 scripts/me20-postpass-fix.py
       - name: Run small ME20-SIM gate
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Commit verified code fixes
+      - name: Commit verified simulator fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add hearts-feedback-diagnosis.js simulation/harness.mjs simulation/cases.mjs
-          git commit -m "Fix final ME20 listening false positives"
+          git add simulation/generator.mjs
+          git commit -m "Keep complete post-pass simulation responses complete"
           git push origin HEAD:fix/me20-sim-diagnostic-scored-records
       - name: Run canonical 100-learner batch
         run: node simulation/cli.mjs --mode batch --learners 100 --hands 2 --seed 20260911 --write-report
