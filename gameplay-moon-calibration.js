@@ -16,20 +16,19 @@ dealPracticeRound=function(){
     marginal:[['C','A',1],['C','K',1],['C','7',1],['D','A',1],['D','K',1],['D','8',1],['S','A',1],['S','Q',1],['S','5',1],['H','A',1],['H','K',1],['H','Q',1],['H','J',1]]
   };
 
-  // Ridiculous two-player hands establish both shooters naturally rather than
-  // forcing a low-card transfer. The human owns the protected heart chain plus
-  // both club/diamond aces. Partner owns protected A-K-Q spade control, so the
-  // two Q♠ cards are a built-in 26-point Partner scoring route, plus secondary
-  // club/diamond controls for collecting dumped hearts without exposing an
-  // outsider. Strong/Solid/Marginal remain unchanged.
+  // Ridiculous two-player uses complementary protected controls. The human
+  // owns hearts plus club kings and diamond aces. Partner owns club aces,
+  // diamond kings/queens, and the protected A-K-Q spade chain (including both
+  // Q♠). This supplies safe reversible control lanes instead of asking either
+  // shooter to throw a low card and hope the table behaves.
   const twoHuman={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['C','A',2],['D','A',2]],
+    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['C','K',2],['D','A',2]],
     strong:[['H','A',2],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['S','K',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
     solid:[['H','A',1],['H','Q',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','Q',1],['D','A',1],['D','K',1],['D','Q',1]],
     marginal:[['H','A',1],['H','Q',1],['H','8',1],['S','A',1],['S','Q',1],['S','7',1],['C','A',1],['C','9',1],['C','5',1],['D','K',1],['D','8',1],['D','4',1],['D','3',1]]
   };
   const twoPartner={
-    ridiculous:[['S','A',2],['S','K',2],['S','Q',2],['D','K',2],['D','Q',2],['C','K',2],['H','7',1]],
+    ridiculous:[['S','A',2],['S','K',2],['S','Q',2],['C','A',2],['D','K',2],['D','Q',2],['H','7',1]],
     strong:[['C','A',1],['C','K',1],['C','Q',2],['D','A',1],['D','K',1],['D','Q',2],['S','A',1],['S','K',1],['S','Q',1],['H','K',1],['H','Q',1]],
     solid:[['H','K',1],['H','J',1],['H','9',1],['H','7',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','J',1],['D','A',1],['D','K',1],['D','J',1]],
     marginal:[['H','K',1],['H','J',1],['H','7',1],['S','K',1],['S','Q',1],['S','6',1],['C','K',1],['C','10',1],['C','6',1],['D','A',1],['D','9',1],['D','5',1],['D','2',1]]
@@ -53,10 +52,52 @@ dealPracticeRound=function(){
   }
 };
 
+// In two-player Ridiculous, teammate controls are not "outside" threats. Make
+// the same pair-aware fact visible to both the card scorer and the QA forecast,
+// so the coach does not secretly optimize against a different model than the
+// explanation it presents.
+const baseMoonLeadForecastForPairControl=moonLeadForecast;
+moonLeadForecast=function(playerIndex,card){
+  const forecast=baseMoonLeadForecastForPairControl(playerIndex,card);
+  if(state.mode!=='practice'||state.practiceType!=='two'||state.practiceStrength!=='ridiculous'||state.partnerIndex==null) return forecast;
+  const other=playerIndex===0?state.partnerIndex:0;
+  if(other==null||other<0) return forecast;
+  const teammate=state.players[other]?.hand||[];
+  const seen=moonExposedCards();
+  let pairHigher=0;
+  for(const rank of RANKS){
+    if(RANK_VALUE[rank]<=RANK_VALUE[card.rank]) continue;
+    const own=state.players[playerIndex].hand.filter(c=>c.suit===card.suit&&c.rank===rank).length;
+    const mate=teammate.filter(c=>c.suit===card.suit&&c.rank===rank).length;
+    const exposed=seen.filter(c=>c.suit===card.suit&&c.rank===rank).length;
+    pairHigher+=Math.max(0,2-own-mate-exposed);
+  }
+  if(forecast.higher>0&&pairHigher===0){
+    // Base forecast penalized live higher cards that are actually protected in
+    // Partner's hand. Replace that penalty with the normal "no higher outside"
+    // reward used by the solo forecast.
+    const oldHigherContribution=-Math.min(34,forecast.higher*5);
+    forecast.score+=34-oldHigherContribution;
+    forecast.higher=0;
+    forecast.notes=forecast.notes.filter(n=>!n.includes('higher outside card'));
+    forecast.notes.unshift('all higher cards are controlled by the shooting pair');
+  }
+
+  const ownPoints=state.players[playerIndex]?.roundPoints||0;
+  const otherPoints=state.players[other]?.roundPoints||0;
+  // Once the human has scored, both copies of C-K are a deliberately protected
+  // bridge to Partner's two C-A cards. Reward this only when every higher club
+  // is pair-controlled; there is no low-card gamble and no outsider can win.
+  if(playerIndex===0&&ownPoints>0&&otherPoints===0&&card.suit==='C'&&card.rank==='K'&&pairHigher===0){
+    forecast.score+=70;
+    forecast.notes.unshift('protected club handoff establishes Partner control');
+  }
+  return forecast;
+};
+
 // A two-player moon requires both members of the pair to become actual
 // collectors. Once one member has scored and the other has not, loaded tricks
-// should preferentially establish the zero-point member. Do not force empty-
-// trick lead transfers; the Ridiculous hand itself supplies safe scoring routes.
+// should preferentially establish the zero-point member.
 const baseMoonShooterForecastForPairBalance=moonShooterForecast;
 moonShooterForecast=function(playerIndex,card){
   const forecast=baseMoonShooterForecastForPairBalance(playerIndex,card);
