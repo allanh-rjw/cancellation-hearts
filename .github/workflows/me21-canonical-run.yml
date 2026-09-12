@@ -1,0 +1,32 @@
+name: ME21 Canonical Gameplay Campaign
+
+on:
+  push:
+    branches: [me21-gameplay-simulation]
+  workflow_dispatch:
+
+jobs:
+  canonical-campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check canonical campaign
+        run: node --input-type=module --check < scripts/run-me21-canonical-campaign.mjs
+      - name: Run canonical ME21 campaign
+        run: node scripts/run-me21-canonical-campaign.mjs
+      - name: Print canonical report
+        if: always()
+        run: |
+          if [ -f simulation/results/me21-latest.md ]; then cat simulation/results/me21-latest.md; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: me21-canonical-results
+          path: |
+            simulation/results/me21-latest.json
+            simulation/results/me21-latest.md
+          if-no-files-found: ignore
