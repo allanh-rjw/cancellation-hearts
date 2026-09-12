@@ -1,7 +1,7 @@
 // Empirical starting-hand calibration for Shoot-the-Moon practice.
 // Strength labels are represented by progressively weaker control structures,
-// not by hidden play-time probability bonuses. Two-player Ridiculous splits
-// control by point suit so both shooters have a natural scoring route.
+// not by hidden play-time probability bonuses. Two-player Ridiculous gives
+// both shooters a natural point-suit scoring route.
 
 const baseDealPracticeRoundForCalibration=dealPracticeRound;
 dealPracticeRound=function(){
@@ -19,13 +19,13 @@ dealPracticeRound=function(){
   // stronger merely because one shooter can vacuum all 52 points; both must
   // have a credible route to a penalty trick for the two-player moon to count.
   const twoHuman={
-    ridiculous:[['H','A',2],['H','J',2],['H','9',2],['S','A',2],['S','K',2],['S','Q',1],['C','A',1],['D','A',1]],
+    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['C','A',2],['D','A',2]],
     strong:[['H','A',2],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['S','K',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
     solid:[['H','A',1],['H','Q',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','Q',1],['D','A',1],['D','K',1],['D','Q',1]],
     marginal:[['H','A',1],['H','Q',1],['H','8',1],['S','A',1],['S','Q',1],['S','7',1],['C','A',1],['C','9',1],['C','5',1],['D','K',1],['D','8',1],['D','4',1],['D','3',1]]
   };
   const twoPartner={
-    ridiculous:[['H','K',2],['H','Q',2],['H','10',2],['C','A',2],['C','K',2],['D','A',2],['D','K',1]],
+    ridiculous:[['S','A',2],['S','K',2],['S','Q',2],['S','J',2],['C','K',2],['D','K',2],['H','9',1]],
     strong:[['C','A',1],['C','K',1],['C','Q',2],['D','A',1],['D','K',1],['D','Q',2],['S','A',1],['S','K',1],['S','Q',1],['H','K',1],['H','Q',1]],
     solid:[['H','K',1],['H','J',1],['H','9',1],['H','7',1],['S','A',1],['S','K',1],['S','Q',1],['C','A',1],['C','K',1],['C','J',1],['D','A',1],['D','K',1],['D','J',1]],
     marginal:[['H','K',1],['H','J',1],['H','7',1],['S','K',1],['S','Q',1],['S','6',1],['C','K',1],['C','10',1],['C','6',1],['D','A',1],['D','9',1],['D','5',1],['D','2',1]]
