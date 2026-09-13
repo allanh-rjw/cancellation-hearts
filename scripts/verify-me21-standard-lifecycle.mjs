@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { extname, join, normalize } from 'node:path';
+import { once } from 'node:events';
+
+const root=process.cwd();
+const mime=new Map([['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],['.mjs','text/javascript; charset=utf-8'],['.css','text/css; charset=utf-8'],['.json','application/json; charset=utf-8']]);
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function chromeBinary(){const bins=[process.env.CHROME_BIN,'google-chrome-stable','google-chrome','chromium','chromium-browser'].filter(Boolean);return bins.find(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0)??(()=>{throw new Error('Chrome/Chromium is required for ME21 lifecycle verification');})();}
+async function waitForDebugPort(profile,chrome,stderr){const file=join(profile,'DevToolsActivePort');for(let i=0;i<150;i++){if(existsSync(file)){const port=Number(readFileSync(file,'utf8').split(/\r?\n/)[0]);if(Number.isInteger(port)&&port>0)return port;}if(chrome.exitCode!==null)throw new Error(`Chrome exited before DevTools started: ${stderr().slice(-1000)}`);await sleep(100);}throw new Error('Chrome DevTools endpoint did not start');}
+async function browserSession(port){const target=await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();const ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');let id=0;const pending=new Map();ws.addEventListener('message',event=>{const msg=JSON.parse(String(event.data));if(!msg.id||!pending.has(msg.id))return;const p=pending.get(msg.id);pending.delete(msg.id);msg.error?p.reject(new Error(msg.error.message)):p.resolve(msg.result);});const send=(method,params={})=>new Promise((resolve,reject)=>{const next=++id;pending.set(next,{resolve,reject});ws.send(JSON.stringify({id:next,method,params}));});const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};await send('Runtime.enable');await send('Page.enable');return{ws,send,evaluate};}
+async function waitFor(evaluate,expression,label){for(let i=0;i<120;i++){if(await evaluate(expression))return;await sleep(100);}throw new Error(`${label} timed out`);}
+const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json'});res.end('{}');return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const file=join(root,normalize(rel).replace(/^(\.\.(\/|\\|$))+/,''));if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
+server.listen(0,'127.0.0.1');await once(server,'listening');const appPort=server.address().port;const profile=mkdtempSync(join(tmpdir(),'hearts-me21-life-'));let chromeError='';const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
+
+function seedScript(seed){return `(()=>{let s=${seed}>>>0;Math.random=()=>{s=(s+0x6D2B79F5)|0;let t=s;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};window.setTimeout=(fn)=>{if(typeof fn==='function')fn();return 0;};window.clearTimeout=()=>{};return true;})()`;}
+async function reload(send,evaluate,seed,target,difficulty){await send('Page.navigate',{url:`http://127.0.0.1:${appPort}/?learningMode=legacy`});await waitFor(evaluate,`document.readyState==='complete'&&typeof state!=='undefined'&&typeof playCard==='function'`,'ME21 lifecycle app startup');await evaluate(seedScript(seed));await evaluate(`(()=>{document.getElementById('gameMode').value='standard';document.getElementById('difficulty').value='${difficulty}';document.getElementById('targetScore').value='${target}';document.getElementById('newGameBtn').click();return true;})()`);}
+async function driveRound(evaluate){return JSON.parse(await evaluate(`(()=>{const startingRound=state.round,passOffset=state.passOffset,dealer=state.dealer;let guard=0;while(!state.gameOver&&guard++<1500){if(state.phase==='passing'){state.selected.clear();const candidates=state.players[0].hand.filter(c=>!(c.suit==='C'&&c.rank==='2'));for(const c of candidates.slice(0,3))state.selected.add(c.id);if(state.selected.size<3)for(const c of state.players[0].hand)if(state.selected.size<3)state.selected.add(c.id);confirmHumanPass();continue;}if(state.phase==='playing'){if(state.currentPlayer!==0)throw new Error('ME21 lifecycle CPU turn remained pending');const legal=legalCards(0);if(!legal.length)throw new Error('ME21 lifecycle human has no legal card');playCard(0,legal[0]);continue;}if(state.phase==='trick-end'){if(state.trickNumber<13){startTrick();continue;}break;}if(state.phase==='dealing')continue;break;}if(guard>=1500)throw new Error('ME21 lifecycle round guard exceeded');const unique=new Set();for(const p of state.players){for(const c of p.hand)unique.add(c.id);for(const c of p.tricks)unique.add(c.id);}for(const x of state.trick||[])unique.add(x.card.id);for(const c of state.carryoverCards||[])unique.add(c.id);return JSON.stringify({startingRound,endingRound:state.round,passOffset,dealer,gameOver:state.gameOver,trickNumber:state.trickNumber,handSizes:state.players.map(p=>p.hand.length),roundPoints:state.players.map(p=>p.roundPoints),roundPointTotal:state.players.reduce((n,p)=>n+p.roundPoints,0),carryoverPoints:state.carryoverPoints,uniqueCards:unique.size,scores:state.players.map(p=>p.score),scoreHistoryLength:state.scoreHistory.length});})()`));}
+async function advanceRound(evaluate){await evaluate(`(()=>{const d=document.getElementById('scoreDialog');if(d?.open)d.close();const b=document.getElementById('nextRoundBtn');if(b.classList.contains('hidden'))throw new Error('ME21 lifecycle Next Hand button hidden before next round');b.click();return true;})()`);}
+function assertRound(result,label){assert.equal(result.trickNumber,13,`${label}: did not finish 13 tricks`);assert.deepEqual(result.handSizes,[0,0,0,0,0,0,0,0],`${label}: cards remained in a hand`);assert.equal(result.uniqueCards,104,`${label}: card identity conservation failed`);assert.equal(result.roundPointTotal,52,`${label}: penalty points did not total 52`);assert.equal(result.carryoverPoints,0,`${label}: unresolved carryover remained`);}
+
+try{
+  const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const {ws,send,evaluate}=await browserSession(debugPort);
+
+  await reload(send,evaluate,2026091220,200,'hard');await evaluate(`state.target=999999`);
+  const cycle=[];
+  for(let i=0;i<8;i++){
+    const result=await driveRound(evaluate);assertRound(result,`pass-cycle hand ${i+1}`);cycle.push({round:result.startingRound,passOffset:result.passOffset,dealer:result.dealer,scores:result.scores});if(i<7)await advanceRound(evaluate);
+  }
+  assert.deepEqual(cycle.map(x=>x.passOffset),[1,-1,2,-2,3,-3,4,0],'ME21 eight-hand pass cycle drifted from canonical pattern');
+  assert.deepEqual(cycle.map(x=>x.round),[1,2,3,4,5,6,7,8],'ME21 sequential round counter drifted');
+  assert.deepEqual(cycle.map(x=>x.dealer),[0,1,2,3,4,5,6,7],'ME21 dealer rotation drifted across the eight-hand cycle');
+
+  const games=[];
+  for(const [index,target] of [100,150,200].entries()){
+    await reload(send,evaluate,2026091230+index,target,['medium','hard','expert'][index]);const hands=[];let guard=0;
+    while(!JSON.parse(await evaluate(`JSON.stringify({gameOver:state.gameOver})`)).gameOver&&guard++<80){const result=await driveRound(evaluate);assertRound(result,`target ${target} hand ${hands.length+1}`);hands.push({round:result.startingRound,passOffset:result.passOffset,scores:result.scores});if(!result.gameOver)await advanceRound(evaluate);}
+    assert.ok(guard<80,`ME21 target ${target} game did not terminate`);
+    const final=JSON.parse(await evaluate(`JSON.stringify({gameOver:state.gameOver,target:state.target,scores:state.players.map(p=>p.score),round:state.round,scoreHistoryLength:state.scoreHistory.length})`));
+    assert.equal(final.gameOver,true,`ME21 target ${target} did not set gameOver`);assert.ok(Math.max(...final.scores)>=target,`ME21 target ${target} ended before any score reached target`);assert.equal(final.scoreHistoryLength,hands.length,`ME21 target ${target} score history does not match completed hands`);games.push({target,hands:hands.length,finalScores:final.scores});
+  }
+  console.log(JSON.stringify({status:'pass',passCycle:cycle,games},null,2));ws.close();
+}finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
