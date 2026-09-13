@@ -15,9 +15,13 @@ const timeoutNeedle="    const maxMs=scenario.mode==='standard'?18000:12000;";
 if(!source.includes(timeoutNeedle)) throw new Error('Scenario timeout hook changed');
 source=source.replace(timeoutNeedle,"    const maxMs=scenario.mode==='standard'?(scenario.targetHands>2?65000:18000):12000;");
 
+const standardSeedsNeedle="const seeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89];";
+if(!source.includes(standardSeedsNeedle)) throw new Error('Standard seed matrix hook changed');
+source=source.replace(standardSeedsNeedle,"const seeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+307,baseSeed+353,baseSeed+401,baseSeed+449];");
+
 const practiceMatrixNeedle="for(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of seeds.slice(0,3))scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1});";
 if(!source.includes(practiceMatrixNeedle)) throw new Error('Practice calibration matrix hook changed');
-source=source.replace(practiceMatrixNeedle,`const calibrationSeeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+131,baseSeed+173,baseSeed+211,baseSeed+257];\nfor(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of calibrationSeeds)scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1,calibration:true});`);
+source=source.replace(practiceMatrixNeedle,`const calibrationSeeds=[baseSeed+11,baseSeed+23,baseSeed+47,baseSeed+89,baseSeed+131,baseSeed+173,baseSeed+211,baseSeed+257,baseSeed+307,baseSeed+353,baseSeed+401,baseSeed+449,baseSeed+503,baseSeed+557,baseSeed+613,baseSeed+673];\nfor(const practiceType of ['solo','two'])for(const strength of ['ridiculous','strong','solid','marginal'])for(const seed of calibrationSeeds)scenarios.push({mode:'practice',practiceType,strength,difficulty:'expert',seed,width:1440,height:900,targetHands:1,calibration:true});\nconst targetedSeeds=[baseSeed+727,baseSeed+761,baseSeed+809,baseSeed+853,baseSeed+907,baseSeed+953,baseSeed+1009,baseSeed+1061,baseSeed+1117,baseSeed+1171,baseSeed+1229,baseSeed+1283,baseSeed+1361,baseSeed+1423,baseSeed+1487,baseSeed+1553];\nfor(const seed of targetedSeeds)scenarios.push({mode:'practice',practiceType:'solo',strength:'solid',difficulty:'expert',seed,width:1440,height:900,targetHands:1,targeted:'solo-solid'});\nfor(const seed of targetedSeeds)scenarios.push({mode:'practice',practiceType:'two',strength:'strong',difficulty:'expert',seed,width:1440,height:900,targetHands:1,targeted:'two-strong'});`);
 
 const scenarioNeedle="scenarios.push({mode:'practice',practiceType:'solo',strength:'strong',difficulty:'expert',seed:baseSeed+703,width:1024,height:768,targetHands:1,openCoach:true});";
 if(!source.includes(scenarioNeedle)) throw new Error('Scenario matrix hook changed');
@@ -31,9 +35,13 @@ const snapshotNeedle="          scoreHistoryLength:state.scoreHistory.length,gam
 if(!source.includes(snapshotNeedle)) throw new Error('Practice outcome snapshot hook changed');
 source=source.replace(snapshotNeedle,"          scoreHistoryLength:state.scoreHistory.length,gameOver:state.gameOver,practiceEnded:state.practiceEnded,practiceSuccess:state.practiceSuccess===true,qaMoonLeadMaxGap:Number(window.__qaMoonLeadMaxGap||0),");
 
+const finalNeedle="    const final=snapshots.at(-1);";
+if(!source.includes(finalNeedle)) throw new Error('Targeted trace hook changed');
+source=source.replace(finalNeedle,`    const final=snapshots.at(-1);\n    const targetedTrace=scenario.targeted?JSON.parse(await evaluate(\`(()=>JSON.stringify({\n      actionLog:(state.actionLog||[]).map(a=>({player:a.player,trick:a.trick,position:a.position,card:a.card?{suit:a.card.suit,rank:a.card.rank}:null,beforeRoundPoints:a.before?.roundPoints||null,beforeTrick:(a.before?.trick||[]).map(x=>({player:x.player,card:{suit:x.card?.suit,rank:x.card?.rank},cancelled:!!x.cancelled}))})),\n      humanDecisionLog:(state.humanDecisionLog||[]).map(x=>({trick:x.trick,played:x.played,recommended:x.recommended,matched:x.matched,strategy:x.strategy,reason:x.reason,pathwayPhase:x.pathwayPhase,immediateObjective:x.immediateObjective})),\n      partnerIndex:state.partnerIndex,roundPoints:state.players.map(p=>p.roundPoints),status:document.getElementById('status')?.textContent||''\n    }))()\`)):null;`);
+
 const resultNeedle="      completedHands:final.scoreHistoryLength,practiceEnded:final.practiceEnded,gameOver:final.gameOver,finalStatus:final.status,";
 if(!source.includes(resultNeedle)) throw new Error('Scenario result hook changed');
-source=source.replace(resultNeedle,"      completedHands:final.scoreHistoryLength,practiceEnded:final.practiceEnded,practiceSuccess:final.practiceSuccess===true,calibration:scenario.calibration===true,forcedOutcome:scenario.forcedOutcome??null,gameOver:final.gameOver,finalPhase:final.phase,finalStatus:final.status,finalTrickNumber:final.trickNumber,finalRoundPoints:final.roundPoints,finalScores:final.scores,finalCenterActionVisible:final.centerActionVisible,qaMoonLeadMaxGap:final.qaMoonLeadMaxGap,");
+source=source.replace(resultNeedle,"      completedHands:final.scoreHistoryLength,practiceEnded:final.practiceEnded,practiceSuccess:final.practiceSuccess===true,calibration:scenario.calibration===true,targeted:scenario.targeted??null,forcedOutcome:scenario.forcedOutcome??null,gameOver:final.gameOver,finalPhase:final.phase,finalStatus:final.status,finalTrickNumber:final.trickNumber,finalRoundPoints:final.roundPoints,finalScores:final.scores,finalCenterActionVisible:final.centerActionVisible,qaMoonLeadMaxGap:final.qaMoonLeadMaxGap,targetedTrace,");
 
 const temp=join(tmpdir(),`verify-gameplay-simulation-qa-${process.pid}.mjs`);
 writeFileSync(temp,source);
@@ -49,9 +57,7 @@ try{
     const collided=report.results.filter(r=>r.collisionCount>0);
     if(collided.length){
       console.log('\nQA collision detail:');
-      for(const r of collided){
-        console.log(`- ${r.label}: ${r.collisionCount}; first=${JSON.stringify(r.collisions?.[0]??null)}`);
-      }
+      for(const r of collided) console.log(`- ${r.label}: ${r.collisionCount}; first=${JSON.stringify(r.collisions?.[0]??null)}`);
     }
 
     const longCycle=report.results.find(r=>r.mode==='standard'&&r.completedHands===8);
@@ -83,7 +89,7 @@ try{
       const key=`${r.practiceType}:${r.strength}`;
       const rows=groups.get(key)??[]; rows.push(r); groups.set(key,rows);
     }
-    console.log('\nQA practice calibration (8-seed cohorts only):');
+    console.log('\nQA practice calibration (16-seed cohorts only):');
     for(const [key,rows] of [...groups.entries()].sort()){
       const breaks=rows.filter(r=>r.practiceEnded&&!r.practiceSuccess&&r.completedHands===0&&Number.isFinite(r.finalTrickNumber));
       const avg=breaks.length?breaks.reduce((n,r)=>n+r.finalTrickNumber,0)/breaks.length:null;
@@ -96,8 +102,19 @@ try{
       console.log(`- ${key}: success=${successCount}/${rows.length} (${(rate*100).toFixed(1)}%); completed-miss=${rows.filter(r=>!r.practiceSuccess&&r.completedHands>0).length}; avg-break-after-trick=${avg==null?'n/a':avg.toFixed(1)}; avg-human-penalty-points=${avgHumanPoints.toFixed(1)}; max-lead-forecast-gap=${maxLeadGap.toFixed(1)}`);
     }
 
-    // Calibration is a product behavior, not a vanity metric. CI must reject a
-    // ladder where an easier label performs worse than the next harder one.
+    console.log('\nQA targeted moon follow-up (additional 16 seeds each):');
+    for(const target of ['solo-solid','two-strong']){
+      const rows=report.results.filter(r=>r.targeted===target);
+      const successes=rows.filter(r=>r.practiceSuccess);
+      const early=rows.filter(r=>r.practiceEnded&&!r.practiceSuccess&&r.completedHands===0);
+      const misses=rows.filter(r=>r.practiceEnded&&!r.practiceSuccess&&r.completedHands>0);
+      console.log(`- ${target}: success=${successes.length}/${rows.length} (${rows.length?(100*successes.length/rows.length).toFixed(1):'n/a'}%); broken-early=${early.length}; completed-miss=${misses.length}`);
+      for(const r of rows.filter(x=>!x.practiceSuccess)){
+        console.log(`  failure seed=${r.seed}; completedHands=${r.completedHands}; finalTrick=${r.finalTrickNumber}; roundPoints=${JSON.stringify(r.finalRoundPoints)}; status=${r.finalStatus}`);
+        if(r.completedHands>0) console.log(`  completed-miss trace seed=${r.seed}: ${JSON.stringify(r.targetedTrace)}`);
+      }
+    }
+
     const strengthOrder=['ridiculous','strong','solid','marginal'];
     let calibrationFailure=false;
     for(const mode of ['solo','two']){
