@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-09-13T01:15:09.690Z",
+  "candidateSha": "24f9994f20e75ba720a8b827d585e7448cd1c3dc",
+  "canonicalRunId": 34730043960,
+  "seedFamilies": {
+    "standard": 2026091300,
+    "games": 2026093000,
+    "soloPractice": 2026100000,
+    "twoPractice": 2026110000,
+    "tutor": 2026120000
+  },
+  "counts": {
+    "standardHands": 1000,
+    "games": 100,
+    "soloPractice": 500,
+    "twoPractice": 500,
+    "tutorHands": 500
+  },
+  "standard": {
+    "hands": 1000,
+    "failures": [],
+    "difficultyCounts": {
+      "easy": 250,
+      "medium": 250,
+      "hard": 250,
+      "expert": 250
+    },
+    "personaCounts": {
+      "The Minimalist": 936,
+      "The Enforcer": 1048,
+      "The Canceller": 968,
+      "The Opportunist": 1016,
+      "The Suit Engineer": 976,
+      "The Hunter": 1008,
+      "The Moonshot": 1048
+    },
+    "passCounts": {
+      "0": 125,
+      "1": 125,
+      "2": 125,
+      "3": 125,
+      "4": 125,
+      "-1": 125,
+      "-2": 125,
+      "-3": 125
+    }
+  },
+  "games": {
+    "completed": 100,
+    "failures": [],
+    "targets": {
+      "100": 34,
+      "150": 33,
+      "200": 33
+    },
+    "minHands": 6,
+    "maxHands": 24,
+    "avgHands": 13.69
+  },
+  "practice": {
+    "solo": 500,
+    "two": 500,
+    "failures": [],
+    "outcomes": {
+      "solo": {
+        "success": 118,
+        "broken": 382,
+        "failedAtEnd": 0
+      },
+      "two": {
+        "success": 173,
+        "broken": 325,
+        "failedAtEnd": 2
+      }
+    },
+    "strengths": {
+      "ridiculous": 250,
+      "strong": 250,
+      "solid": 250,
+      "marginal": 250
+    }
+  },
+  "tutor": {
+    "hands": 500,
+    "recommendations": 6371,
+    "pathways": 6371,
+    "failures": [],
+    "strategyCounts": {
+      "avoidance": 233,
+      "targeting": 187,
+      "twoMoon": 67,
+      "cancellation": 9,
+      "soloMoon": 4
+    },
+    "difficultyCounts": {
+      "easy": 125,
+      "medium": 126,
+      "hard": 125,
+      "expert": 124
+    }
+  },
+  "failures": [],
+  "clusters": [],
+  "syntheticIsolation": {
+    "calibrationEligible": 0,
+    "learnerModelEligible": 0,
+    "productionStateTouched": false
+  },
+  "status": "ACCEPTED"
+}

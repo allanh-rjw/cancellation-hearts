@@ -63,10 +63,15 @@ jobs:
             simulation/report.mjs
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
-            scripts/verify-final-trick-cancellation.mjs
             scripts/verify-gameplay-simulation.mjs
             scripts/verify-gameplay-simulation-qa.mjs
             scripts/qa-gameplay-runtime-patch.js
+            scripts/verify-me21-standard-game.mjs
+            scripts/verify-me21-final-trick.mjs
+            scripts/verify-me21-standard-lifecycle.mjs
+            scripts/verify-me21-moon-practice.mjs
+            scripts/verify-me21-ui-pivot.mjs
+            scripts/run-me21-canonical-campaign.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -84,10 +89,18 @@ jobs:
         run: node scripts/verify-parity-dispatch.mjs
       - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization
         run: node scripts/verify-browser-startup.mjs
+      - name: Verify ME21 Standard Game production simulation
+        run: node scripts/verify-me21-standard-game.mjs
+      - name: Verify ME21 final no-winner trick accounting
+        run: node scripts/verify-me21-final-trick.mjs
+      - name: Verify ME21 Standard Game lifecycle and score targets
+        run: node scripts/verify-me21-standard-lifecycle.mjs
+      - name: Verify ME21 Shoot-the-Moon Practice integrity
+        run: node scripts/verify-me21-moon-practice.mjs
+      - name: Verify ME21 UI reachability and strategy pivots
+        run: node scripts/verify-me21-ui-pivot.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Verify final-trick full-cancellation rule
-        run: node scripts/verify-final-trick-cancellation.mjs
       - name: Run deterministic standard and moon-practice gameplay simulations
         # This is the cross-product regression gate after Tutor validation.
         run: node scripts/verify-gameplay-simulation-qa.mjs
