@@ -52,14 +52,55 @@ dealPracticeRound=function(){
   }
 };
 
+function moonPairOutsideCount(suit,rank){
+  if(state.partnerIndex==null) return 2;
+  const shooters=[0,state.partnerIndex];
+  const held=shooters.reduce((n,i)=>n+state.players[i].hand.filter(c=>c.suit===suit&&c.rank===rank).length,0);
+  const exposed=moonExposedCards().filter(c=>c.suit===suit&&c.rank===rank).length;
+  return Math.max(0,2-held-exposed);
+}
+function moonPairHigherOutside(card){
+  let count=0;
+  for(const rank of RANKS){
+    if(RANK_VALUE[rank]<=RANK_VALUE[card.rank]) continue;
+    count+=moonPairOutsideCount(card.suit,rank);
+  }
+  return count;
+}
+function strongPartnerScoringHandoff(lead){
+  if(state.mode!=='practice'||state.practiceType!=='two'||state.practiceStrength!=='strong'||state.partnerIndex==null) return null;
+  if((state.players[0]?.roundPoints||0)<=0||(state.players[state.partnerIndex]?.roundPoints||0)>0) return null;
+  if(lead.suit!=='H') return null;
+  const candidates=state.players[state.partnerIndex].hand
+    .filter(c=>c.suit===lead.suit&&RANK_VALUE[c.rank]>RANK_VALUE[lead.rank])
+    .sort((a,b)=>RANK_VALUE[a.rank]-RANK_VALUE[b.rank]);
+  for(const takeover of candidates){
+    if(moonPairHigherOutside(takeover)>0) continue;
+    if(moonPairOutsideCount(takeover.suit,takeover.rank)>0) continue;
+    return takeover;
+  }
+  return null;
+}
+
 // In two-player Ridiculous, teammate controls are not "outside" threats. Make
 // the same pair-aware fact visible to both the card scorer and the QA forecast,
 // so the coach does not secretly optimize against a different model than the
-// explanation it presents.
+// explanation it presents. Strong additionally recognizes a protected loaded
+// heart handoff when Partner still needs to become the second scorer.
 const baseMoonLeadForecastForPairControl=moonLeadForecast;
 moonLeadForecast=function(playerIndex,card){
   const forecast=baseMoonLeadForecastForPairControl(playerIndex,card);
-  if(state.mode!=='practice'||state.practiceType!=='two'||state.practiceStrength!=='ridiculous'||state.partnerIndex==null) return forecast;
+  if(state.mode!=='practice'||state.practiceType!=='two'||state.partnerIndex==null) return forecast;
+
+  if(state.practiceStrength==='strong'&&playerIndex===0){
+    const takeover=strongPartnerScoringHandoff(card);
+    if(takeover){
+      forecast.score+=120;
+      forecast.notes.unshift(`protected heart handoff lets Partner score with ${cardLabel(takeover)}`);
+    }
+  }
+
+  if(state.practiceStrength!=='ridiculous') return forecast;
   const other=playerIndex===0?state.partnerIndex:0;
   if(other==null||other<0) return forecast;
   const teammate=state.players[other]?.hand||[];
@@ -73,9 +114,6 @@ moonLeadForecast=function(playerIndex,card){
     pairHigher+=Math.max(0,2-own-mate-exposed);
   }
   if(forecast.higher>0&&pairHigher===0){
-    // Base forecast penalized live higher cards that are actually protected in
-    // Partner's hand. Replace that penalty with the normal "no higher outside"
-    // reward used by the solo forecast.
     const oldHigherContribution=-Math.min(34,forecast.higher*5);
     forecast.score+=34-oldHigherContribution;
     forecast.higher=0;
@@ -85,9 +123,6 @@ moonLeadForecast=function(playerIndex,card){
 
   const ownPoints=state.players[playerIndex]?.roundPoints||0;
   const otherPoints=state.players[other]?.roundPoints||0;
-  // Once the human has scored, both copies of C-K are a deliberately protected
-  // bridge to Partner's two C-A cards. Reward this only when every higher club
-  // is pair-controlled; there is no low-card gamble and no outsider can win.
   if(playerIndex===0&&ownPoints>0&&otherPoints===0&&card.suit==='C'&&card.rank==='K'&&pairHigher===0){
     forecast.score+=70;
     forecast.notes.unshift('protected club handoff establishes Partner control');
