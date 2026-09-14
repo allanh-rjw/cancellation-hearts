@@ -29,6 +29,8 @@ const server=createServer((req,res)=>{try{
   res.end(readFileSync(file));
 }catch{res.writeHead(404);res.end('not found');}});
 
+function observedOperations(){return [...new Set(gatewayRequests.map(row=>row.path.split('/').pop()))];}
+
 async function verifyDispatch(debugPort,baseUrl,{label,path,expectedMode}){
   gatewayRequests.length=0;
   const target=await openTarget(debugPort);
@@ -40,10 +42,11 @@ async function verifyDispatch(debugPort,baseUrl,{label,path,expectedMode}){
   await send('Runtime.enable');await send('Page.enable');
   await send('Page.navigate',{url:`${baseUrl}/${path}`});
   for(let i=0;i<100;i++){const mode=await evaluate(`window.CancellationHeartsLearningRuntime?.status?.().mode??null`);if(mode===expectedMode)break;await sleep(100);if(i===99)throw new Error(`${label}: runtime did not initialize as ${expectedMode}`);}
+  for(let i=0;i<40&&!observedOperations().includes('access-preflight');i++)await sleep(100);
+  if(!observedOperations().includes('access-preflight'))throw new Error(`${label}: startup did not dispatch access-preflight`);
   await evaluate(`document.getElementById('newGameBtn').click()`);
-  for(let i=0;i<40&&gatewayRequests.length===0;i++)await sleep(100);
-  if(gatewayRequests.length===0)throw new Error(`${label}: Start New Game dispatched zero Learning Gateway requests`);
-  const operations=[...new Set(gatewayRequests.map(row=>row.path.split('/').pop()))];
+  for(let i=0;i<80&&!observedOperations().includes('assess-hand');i++)await sleep(100);
+  const operations=observedOperations();
   if(!operations.includes('assess-hand'))throw new Error(`${label}: dispatch did not include assess-hand; observed: ${operations.join(', ')}`);
   console.log(`${label}: ${gatewayRequests.length} Gateway request(s); operations=${operations.join(',')}`);
   ws.close();
@@ -61,7 +64,7 @@ try{
   const baseUrl=`http://127.0.0.1:${appPort}`;
   await verifyDispatch(debugPort,baseUrl,{label:'default-gateway',path:'',expectedMode:'gateway'});
   await verifyDispatch(debugPort,baseUrl,{label:'parity-override',path:'?learningMode=parity',expectedMode:'parity'});
-  console.log('gateway-dispatch: production default and parity both dispatch Learning Gateway requests');
+  console.log('gateway-dispatch: startup access preflight and game coaching dispatch verified in gateway and parity modes');
 }finally{
   chrome.kill('SIGTERM');
   if(chrome.exitCode===null)await once(chrome,'exit');
