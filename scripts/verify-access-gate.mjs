@@ -31,8 +31,8 @@ try{
   const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);
   {
     const {ws,send,evaluate}=await browserSession(debugPort);await send('Page.navigate',{url:baseUrl});
-    await waitFor(evaluate,`document.documentElement.dataset.ulsAccess==='denied'`,'revoked learner');
-    const snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement.dataset.ulsAccess,overlay:document.getElementById('ulsAccessGate')?.textContent??'',hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
+    await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='denied'`,'revoked learner');
+    const snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:document.getElementById('ulsAccessGate')?.textContent??'',hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
     if(snapshot.gate!=='denied'||snapshot.hidden!=='true'||snapshot.inert!==true)throw new Error(`revoked learner: app did not fail closed ${JSON.stringify(snapshot)}`);
     if(!snapshot.overlay.includes('access is not active'))throw new Error(`revoked learner: denial message missing ${snapshot.overlay}`);
     ws.close();
@@ -40,8 +40,8 @@ try{
   authorized=true;
   {
     const {ws,send,evaluate}=await browserSession(debugPort);await send('Page.navigate',{url:baseUrl});
-    await waitFor(evaluate,`document.documentElement.dataset.ulsAccess==='active'`,'active learner');
-    const snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement.dataset.ulsAccess,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
+    await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'`,'active learner');
+    const snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
     if(snapshot.gate!=='active'||snapshot.overlay||snapshot.hidden==='true'||snapshot.inert===true)throw new Error(`active learner: app did not unlock ${JSON.stringify(snapshot)}`);
     ws.close();
   }
