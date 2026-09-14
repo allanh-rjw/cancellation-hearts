@@ -8,14 +8,17 @@
     lastResults:{},
     parityResults:{},
     lastError:null,
+    accessStatus:'unchecked',
+    accessError:null,
     gatewayBaseUrl:'',
     setMode,
     getMode:()=>runtime.mode,
+    claimAccess,
     refreshCoach,
     execute,
     evaluatePlay,
     requestNextActivity,
-    status:()=>({mode:runtime.mode,gatewayBaseUrl:runtime.gatewayBaseUrl,lastError:runtime.lastError,parityResults:{...runtime.parityResults}})
+    status:()=>({mode:runtime.mode,gatewayBaseUrl:runtime.gatewayBaseUrl,accessStatus:runtime.accessStatus,accessError:runtime.accessError,lastError:runtime.lastError,parityResults:{...runtime.parityResults}})
   };
 
   function configuredMode(){
@@ -32,11 +35,27 @@
   function setMode(value,{persist=true}={}){
     runtime.mode=api.normalizeMigrationMode(value,DEFAULT_MODE);
     if(persist){try{localStorage.setItem(STORAGE_KEY,runtime.mode);}catch{}}
+    if(runtime.mode!=='legacy')void claimAccess().catch(()=>{});
     return runtime.mode;
   }
   runtime.mode=configuredMode();
   runtime.gatewayBaseUrl=configuredBaseUrl();
   const client=api.createLearningGatewayClient({baseUrl:runtime.gatewayBaseUrl});
+
+  async function claimAccess(){
+    if(runtime.mode==='legacy')return null;
+    runtime.accessStatus='checking';
+    runtime.accessError=null;
+    try{
+      const result=await client.preflight();
+      runtime.accessStatus='active';
+      return result;
+    }catch(error){
+      runtime.accessStatus='error';
+      runtime.accessError={code:error?.code||'gateway-unavailable',message:error?.message||'Learning access unavailable'};
+      throw error;
+    }
+  }
 
   function appState(){return state;}
   function visibleState(){return api.adaptLearnerVisibleState(appState());}
@@ -227,8 +246,10 @@
     defaultMode:DEFAULT_MODE,
     learnerVisibleOnly:true,
     serviceCredentialsInBrowser:false,
+    accessPreflight:true,
     operations:[...api.LEARNING_OPERATIONS]
   };
+  if(runtime.mode!=='legacy')void claimAccess().catch(error=>console.warn('ULS access preflight failed:',error?.code||error?.message));
   if(runtime.mode!=='legacy'&&state.players?.length)scheduleRefresh();
 })().catch(error=>{
   console.error('ULS Learning Gateway integration failed to initialize:',error);
