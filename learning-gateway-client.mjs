@@ -1,6 +1,11 @@
 const DOMAIN_ID = "cancellation-hearts";
 const MODES = Object.freeze(["legacy", "gateway", "parity"]);
 const DISPOSITIONS = new Set(["completed", "unsupported", "abstained"]);
+const ACCESS_PREFLIGHT_OPERATION = "access-preflight";
+const ACCESS_PREFLIGHT_STATE = Object.freeze({
+  schemaVersion: 1,
+  informationBoundary: "learner-observable"
+});
 export const LEARNING_OPERATIONS = Object.freeze([
   "assess-hand",
   "recommend-strategy",
@@ -193,42 +198,50 @@ export function createLearningGatewayClient({
   idFactory = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
 } = {}) {
   if (typeof fetchImpl !== "function") throw new TypeError("fetch implementation is required");
-  return Object.freeze({
-    async execute(operation, learnerVisibleState, operationInput = {}) {
-      if (!LEARNING_OPERATIONS.includes(operation)) throw new TypeError(`Unsupported app operation: ${operation}`);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetchImpl(endpoint(baseUrl, operation), {
-          method: "POST",
-          credentials: "include",
-          signal: controller.signal,
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            "x-request-id": requestId("app", idFactory),
-            "x-correlation-id": requestId("app-correlation", idFactory)
-          },
-          body: JSON.stringify({ learnerVisibleState, operationInput })
+
+  async function send(operation, learnerVisibleState, operationInput = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(endpoint(baseUrl, operation), {
+        method: "POST",
+        credentials: "include",
+        signal: controller.signal,
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-request-id": requestId("app", idFactory),
+          "x-correlation-id": requestId("app-correlation", idFactory)
+        },
+        body: JSON.stringify({ learnerVisibleState, operationInput })
+      });
+      const body = await responseBody(response);
+      if (!response.ok) {
+        const code = failureCode(response.status, body);
+        throw new LearningGatewayError(code, failureMessage(code), {
+          status: response.status,
+          retryable: response.status >= 500
         });
-        const body = await responseBody(response);
-        if (!response.ok) {
-          const code = failureCode(response.status, body);
-          throw new LearningGatewayError(code, failureMessage(code), {
-            status: response.status,
-            retryable: response.status >= 500
-          });
-        }
-        return validateGatewayResult(body, operation);
-      } catch (error) {
-        if (error instanceof LearningGatewayError) throw error;
-        if (error?.name === "AbortError") {
-          throw new LearningGatewayError("gateway-timeout", "The learning service timed out.", { retryable: true });
-        }
-        throw new LearningGatewayError("gateway-unavailable", "The learning service is unavailable.", { retryable: true });
-      } finally {
-        clearTimeout(timeout);
       }
+      return validateGatewayResult(body, operation);
+    } catch (error) {
+      if (error instanceof LearningGatewayError) throw error;
+      if (error?.name === "AbortError") {
+        throw new LearningGatewayError("gateway-timeout", "The learning service timed out.", { retryable: true });
+      }
+      throw new LearningGatewayError("gateway-unavailable", "The learning service is unavailable.", { retryable: true });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return Object.freeze({
+    preflight() {
+      return send(ACCESS_PREFLIGHT_OPERATION, ACCESS_PREFLIGHT_STATE, {});
+    },
+    execute(operation, learnerVisibleState, operationInput = {}) {
+      if (!LEARNING_OPERATIONS.includes(operation)) throw new TypeError(`Unsupported app operation: ${operation}`);
+      return send(operation, learnerVisibleState, operationInput);
     }
   });
 }
