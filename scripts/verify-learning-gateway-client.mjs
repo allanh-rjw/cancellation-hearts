@@ -95,6 +95,30 @@ assert.ok(!Object.hasOwn(captured.body,"learnerRef"),"browser must not manufactu
 assert.ok(!Object.hasOwn(captured.body,"accountId"),"browser must not manufacture account identity");
 assert.deepEqual(Object.keys(captured.body).sort(),["learnerVisibleState","operationInput"]);
 
+let preflightCaptured=null;
+const preflight=createLearningGatewayClient({
+  baseUrl:"https://gateway.example",
+  fetchImpl:async(url,init)=>{
+    preflightCaptured={url,init,body:JSON.parse(String(init.body))};
+    return new Response(JSON.stringify({
+      domainId:"cancellation-hearts",
+      packVersion:"0.1.0",
+      operation:"access-preflight",
+      requestId:"preflight-request",
+      correlationId:"preflight-correlation",
+      disposition:"unsupported",
+      output:null
+    }),{status:200,headers:{"content-type":"application/json"}});
+  }
+});
+await preflight.preflight();
+assert.equal(preflightCaptured.url,"https://gateway.example/v1/domains/cancellation-hearts/access-preflight");
+assert.equal(preflightCaptured.init.credentials,"include");
+assert.deepEqual(preflightCaptured.body.learnerVisibleState,{schemaVersion:1,informationBoundary:"learner-observable"});
+assert.deepEqual(preflightCaptured.body.operationInput,{});
+assert.ok(!Object.hasOwn(preflightCaptured.body,"learnerRef"),"preflight must not manufacture learner identity");
+assert.ok(!Object.hasOwn(preflightCaptured.body,"accountId"),"preflight must not manufacture account identity");
+
 const unauthorized=createLearningGatewayClient({
   fetchImpl:async()=>new Response(JSON.stringify({code:"authentication-required"}),{status:401,headers:{"content-type":"application/json"}})
 });
