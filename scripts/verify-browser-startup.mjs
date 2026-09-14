@@ -7,7 +7,7 @@ import { once } from 'node:events';
 
 const root=process.cwd();
 const indexHtml=readFileSync(join(root,'index.html'),'utf8');
-for(const asset of ['style.css','app.js','learning-gateway-runtime.js','causal-loader.js']){
+for(const asset of ['style.css','app.js','learning-gateway-runtime.js','access-gate.js','causal-loader.js']){
   if(!indexHtml.includes(`${asset}?v=`)) throw new Error(`Browser asset is not cache-versioned: ${asset}`);
 }
 const mime=new Map([['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],['.mjs','text/javascript; charset=utf-8'],['.css','text/css; charset=utf-8'],['.json','application/json; charset=utf-8']]);
@@ -31,11 +31,12 @@ async function waitFor(evaluate,expression,label,{tries=100,delay=100}={}){for(l
 async function inspectOrdinaryMode(port,baseUrl,{label,path,expectedMode}){
   const {ws,exceptions,send,evaluate}=await browserSession(port,label);
   await send('Page.navigate',{url:`${baseUrl}/${path}`});
-  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r)return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${label} startup`);
+  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r||document.documentElement?.dataset?.ulsAccess!=='active')return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,access:document.documentElement.dataset.ulsAccess,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${label} startup`);
   const snapshot=JSON.parse(raw);
   if(!snapshot.setup||snapshot.setupHidden)throw new Error(`${label}: setup screen did not initialize`);
   if(snapshot.passwordGate)throw new Error(`${label}: obsolete password gate is still present`);
   if(snapshot.appHidden==='true')throw new Error(`${label}: application remains aria-hidden`);
+  if(snapshot.access!=='active')throw new Error(`${label}: access gate did not unlock`);
   if(snapshot.gateway?.status==='initialization-failed')throw new Error(`${label}: Learning Gateway bootstrap failed`);
   if(snapshot.gateway?.defaultMode!=='gateway')throw new Error(`${label}: production default is not gateway`);
   if(snapshot.runtime?.mode!==expectedMode)throw new Error(`${label}: expected ${expectedMode}, received ${snapshot.runtime?.mode}`);
@@ -56,7 +57,7 @@ async function inspectOrdinaryMode(port,baseUrl,{label,path,expectedMode}){
 async function inspectTutorMode(port,baseUrl){
   const label='tutor';const {ws,exceptions,send,evaluate}=await browserSession(port,label);
   await send('Page.navigate',{url:`${baseUrl}/?learningMode=legacy`});
-  await waitFor(evaluate,`window.__adaptiveTutorLoaded===true&&!!window.CancellationHeartsTutor&&!!document.querySelector('#gameMode option[value="tutor"]')`,label,{tries:150});
+  await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'&&window.__adaptiveTutorLoaded===true&&!!window.CancellationHeartsTutor&&!!document.querySelector('#gameMode option[value="tutor"]')`,label,{tries:150});
   const before=JSON.parse(await evaluate(`JSON.stringify({initialized:window.CancellationHeartsTutor.isInitialized(),count:window.CancellationHeartsTutor.coreConstructionCount(),tutorHidden:document.getElementById('tutorRoot')?.classList.contains('hidden')??null})`));
   if(before.initialized!==false||before.count!==0)throw new Error('tutor: core initialized before user entered Tutor mode');
   await evaluate(`(()=>{const mode=document.getElementById('gameMode');mode.value='tutor';mode.dispatchEvent(new Event('change',{bubbles:true}));document.getElementById('newGameBtn').click();return true;})()`);
@@ -72,7 +73,7 @@ async function inspectTutorMode(port,baseUrl){
   if(exceptions.length)throw new Error(`tutor: uncaught browser exception: ${exceptions.join(' | ')}`);
   console.log('tutor: real user entry initialized one core, opened diagnostic, repeated start remained idempotent');ws.close();
 }
-const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
+const server=createServer((req,res)=>{try{const requested=new URL(req.url,'http://localhost').pathname;if(requested==='/v1/domains/cancellation-hearts/access-preflight'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({domainId:'cancellation-hearts',packVersion:'0.1.0',operation:'access-preflight',requestId:'startup-access',correlationId:'startup-access',disposition:'completed',output:{authorized:true},provenanceRefs:['browser-startup'],learning:{snapshotVersion:1,evidenceIds:[]}}));return;}if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));}catch{res.writeHead(404);res.end('not found');}});
 server.listen(0,'127.0.0.1');await once(server,'listening');const appPort=server.address().port;const profile=mkdtempSync(join(tmpdir(),'hearts-browser-startup-'));let chromeError='';const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
 try{
   const debugPort=await waitForDebugPort(profile,chrome,()=>chromeError);const baseUrl=`http://127.0.0.1:${appPort}`;
@@ -84,5 +85,5 @@ try{
   ];
   for(const item of cases)await inspectOrdinaryMode(debugPort,baseUrl,item);
   await inspectTutorMode(debugPort,baseUrl);
-  console.log('browser-startup: plain URL defaults to gateway; legacy/parity/gateway overrides stable; Tutor remains lazy and single-construction');
+  console.log('browser-startup: entitlement active; plain URL defaults to gateway; legacy/parity/gateway overrides stable; Tutor remains lazy and single-construction');
 }finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
