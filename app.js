@@ -20,7 +20,7 @@ const state = {
   players: [], dealer: 0, round: 1, target: 100, difficulty: 'medium',
   currentPlayer: 0, leader: 0, trick: [], trickNumber: 0, heartsBroken: false,
   phase: 'idle', selected: new Set(), passOffset: 1, gameOver: false, coachStrategy: null,
-  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, opponentPlans:{}, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
+  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, opponentPlans:{}, opponentDiagnostics:null, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
 };
 
 
@@ -532,16 +532,41 @@ function scoreAwareAdjustment(i,c){
   return s*min(1.5,prof.lookahead/3);
 }
 function min(a,b){return Math.min(a,b);}
+function opponentDecisionOutcome(i,c,legal,plan){
+  const winner=currentWinningPlayerIfPlayed(c,i);
+  const points=state.carryoverPoints+state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0)+cardPoints(c);
+  const rank=RANK_VALUE[c.rank],safeLoss=winner!==i;
+  const higherSafe=legal.some(card=>card.id!==c.id&&RANK_VALUE[card.rank]>rank&&currentWinningPlayerIfPlayed(card,i)!==i);
+  const matches=state.trick.some(x=>x.card.suit===c.suit&&x.card.rank===c.rank);
+  return {cardId:c.id,card:`${c.rank}${c.suit}`,winner,points,immediateRisk:winner===i?points:0,
+    preservesSafeExit:!(safeLoss&&rank<=6&&higherSafe),leadControl:winner===i?'gain':'surrender',
+    cancellation:matches?(winner===i?'exposure':'opportunity'):'none',carriedPenaltyExposure:winner===i?state.carryoverPoints:0,
+    strategyProgress:opponentStrategyAdjustment(i,c,plan)+opponentPathwayAdjustment(i,c,plan)};
+}
+function traceOpponentDecision(i,legal,ranked,chosen,reason,plan){
+  const diagnostic=state.opponentDiagnostics;
+  if(!diagnostic?.enabled)return;
+  const shadow=diagnostic.shadowPolicy==='greedy'?ranked[0].c:chosen;
+  const outcomes=Object.fromEntries(legal.map(card=>[card.id,opponentDecisionOutcome(i,card,legal,plan)]));
+  diagnostic.rows.push({seat:i,persona:state.players[i].persona,trick:state.trickNumber+1,position:state.trick.length,
+    strategy:plan?.strategy??null,pathwayStage:plan?.phase??null,objective:plan?.pathway?.objective??null,
+    legalActions:ranked.map(x=>({cardId:x.c.id,card:`${x.c.rank}${x.c.suit}`,score:x.s})),
+    selected:outcomes[chosen.id],shadow:outcomes[shadow.id],agreement:chosen.id===shadow.id,
+    tieBreak:{reason,scoreGap:ranked.length>1?ranked[0].s-ranked[1].s:null,rankedCardIds:ranked.map(x=>x.c.id)}});
+}
 function chooseAiCard(i){
   const legal=legalCards(i), p=state.players[i], prof=difficultyProfile();
   const plan=opponentStrategyPlan(i);
   const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+standardTacticalAdjustment(i,c)+opponentStrategyAdjustment(i,c,plan)+opponentPathwayAdjustment(i,c,plan)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
   const threat=practiceThreatState();
-  if(state.difficulty==='easy' && !threat.credible) return legal[Math.floor(Math.random()*legal.length)];
-  if(prof.blunder&&Math.random()<prof.blunder) return ranked[Math.min(1,ranked.length-1)].c;
+  let chosen,reason='top-ranked';
+  if(state.difficulty==='easy' && !threat.credible){chosen=legal[Math.floor(Math.random()*legal.length)];reason='easy-random';}
+  else if(prof.blunder&&Math.random()<prof.blunder){chosen=ranked[Math.min(1,ranked.length-1)].c;reason='difficulty-blunder';}
   // Only randomize among genuinely close plays; Expert is almost deterministic.
-  if(ranked.length>1 && ranked[0].s-ranked[1].s<prof.noise && Math.random()<.22) return ranked[1].c;
-  return ranked[0].c;
+  else if(ranked.length>1 && ranked[0].s-ranked[1].s<prof.noise && Math.random()<.22){chosen=ranked[1].c;reason='close-score-noise';}
+  else chosen=ranked[0].c;
+  traceOpponentDecision(i,legal,ranked,chosen,reason,plan);
+  return chosen;
 }
 function opponentStrategyPlan(i){
   if(state.mode!=='standard'||difficultyProfile().lookahead<1) return null;
