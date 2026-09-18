@@ -102,7 +102,7 @@ const diagnosticRuntime=String.raw`
     state.players=Array.from({length:8},(_,i)=>({name:'P'+i,persona:PERSONAS[i%PERSONAS.length],score:i*3,roundPoints:0,hand:[],tricks:[]}));
     Object.assign(state,{dealer:seed%8,currentPlayer:0,leader:0,trick:[],trickNumber:0,heartsBroken:false,phase:'passing',
       gameOver:false,carryoverPoints:0,carryoverCards:[],openingAutoPlayers:new Set(),openingLeadSuit:null,opponentPlans:{},
-      actionLog:[],opponentHistory:{},selected:new Set()});
+      opponentDiagnostics:null,actionLog:[],opponentHistory:{},selected:new Set()});
     const deck=shuffle(makeDeck());
     for(let i=0;i<deck.length;i++)state.players[i%8].hand.push(deck[i]);
     state.players.forEach(player=>sortHand(player.hand));
@@ -206,9 +206,10 @@ const diagnosticRuntime=String.raw`
       if(plan&&!plan.voidCandidate)traces.push({category:'selection',policy,seat:i,reason:'strategy lacked an intended void'});
     }
   }
-  function runHand(seed,offset,currentSeatList){
+  function runHand(seed,offset,currentSeatList,traceEnabled=true){
     const currentSeats=new Set(currentSeatList),metrics={current:emptyMetrics(),legacy:emptyMetrics()},traces=[];
     const dealt=reset(seed,offset,currentSeats),initialHands=state.players.map(player=>clone(player.hand));
+    if(traceEnabled)state.opponentDiagnostics={enabled:true,shadowPolicy:'greedy',rows:[]};
     const strategyEvidence=Object.fromEntries([...currentSeats].map(i=>{const plan=opponentStrategyPlan(i),m=humanHandMetrics(i);return [i,{strategy:plan.strategy,
       evidence:plan.evidence,facts:plan.facts,control:m.control,hearts:m.hearts.length,pairs:m.pairs.length,voidCandidate:m.voidCandidate,exits:m.exits.length}];}));
     for(const [seat,evidence] of Object.entries(strategyEvidence)){
@@ -240,7 +241,9 @@ const diagnosticRuntime=String.raw`
     }
     postHand(initialHands,currentSeats,metrics,traces);
     const initialStrategies=Object.fromEntries(Object.entries(state.opponentPlans).map(([i,p])=>[i,p.originalStrategy]));
-    return {seed,offset,currentSeats:currentSeatList,metrics,traces,points:state.players.map(p=>p.roundPoints),initialStrategies,strategyEvidence,dealt};
+    const decisionTraces=clone(state.opponentDiagnostics?.rows||[]),plays=state.actionLog.map(x=>x.card.id);
+    return {seed,offset,currentSeats:currentSeatList,metrics,traces,decisionTraces,plays,
+      points:state.players.map(p=>p.roundPoints),initialStrategies,strategyEvidence,dealt};
   }
   window.__opponentDiagnostic={runHand};
 })()`;
@@ -257,6 +260,22 @@ function confidence95(values){
   const variance=values.reduce((sum,x)=>sum+(x-mean)**2,0)/(values.length-1);
   const margin=1.96*Math.sqrt(variance/values.length);
   return [mean-margin,mean+margin];
+}
+function summarizeDecisionTraces(hands){
+  const traces=hands.flatMap(hand=>hand.decisionTraces.map(row=>({...row,offset:hand.offset})));
+  const summarize=rows=>({decisions:rows.length,disagreements:rows.filter(x=>!x.agreement).length,
+    agreementRate:rows.length?rows.filter(x=>x.agreement).length/rows.length:1,
+    currentImmediateRisk:rows.reduce((sum,x)=>sum+x.selected.immediateRisk,0),
+    shadowImmediateRisk:rows.reduce((sum,x)=>sum+x.shadow.immediateRisk,0),
+    currentSafeExitLosses:rows.filter(x=>!x.selected.preservesSafeExit).length,
+    shadowSafeExitLosses:rows.filter(x=>!x.shadow.preservesSafeExit).length,
+    currentCancellationExposure:rows.filter(x=>x.selected.cancellation==='exposure').length,
+    shadowCancellationExposure:rows.filter(x=>x.shadow.cancellation==='exposure').length,
+    currentCarriedPenaltyExposure:rows.reduce((sum,x)=>sum+x.selected.carriedPenaltyExposure,0),
+    shadowCarriedPenaltyExposure:rows.reduce((sum,x)=>sum+x.shadow.carriedPenaltyExposure,0)});
+  const grouped=key=>Object.fromEntries([...new Set(traces.map(key))].map(value=>[value,summarize(traces.filter(row=>key(row)===value))]));
+  return {overall:summarize(traces),byTrick:grouped(x=>x.trick),byPersona:grouped(x=>x.persona),
+    byStrategy:grouped(x=>x.strategy??'none'),byPassDirection:grouped(x=>x.offset),bySeat:grouped(x=>x.seat)};
 }
 function summarize(hands){
   const aggregate={current:{},legacy:{}},handAdvantages=[],traces=[];
@@ -280,6 +299,7 @@ function summarize(hands){
     comparison:{meanPointAdvantagePerTeamHand:mean,confidence95:confidence95(pairedAdvantages),pairedSamples:pairedAdvantages.length,
       currentLoadedCaptureReduction:aggregate.legacy.avoidableLoadedCaptures?
         1-aggregate.current.avoidableLoadedCaptures/aggregate.legacy.avoidableLoadedCaptures:null},
+    shadowDiagnostics:summarizeDecisionTraces(hands),
     failureCategories:Object.fromEntries(categories.map(category=>[category,traces.filter(x=>x.category===category).length])),
     byOffset,strategyEvidenceSamples:hands.slice(0,4).map(({seed,offset,strategyEvidence})=>({seed,offset,strategyEvidence})),
     representativeFailures:categories.flatMap(category=>traces.filter(x=>x.category===category).slice(0,8))};
@@ -304,6 +324,11 @@ async function executeDiagnostic(evaluate){
     if(JSON.stringify(deals(hands))!==JSON.stringify(deals(repeated)))fail('diagnostic deals are not deterministic');
     if(hands.some(hand=>hand.points.reduce((sum,x)=>sum+x,0)!==52))fail('a diagnostic hand did not account for 52 points');
     if(hands.some(hand=>hand.metrics.current.decisions!==52||hand.metrics.legacy.decisions!==52))fail('a diagnostic hand did not record 104 decisions');
+    if(hands.some(hand=>hand.decisionTraces.length!==52))fail('a diagnostic hand did not trace every current-policy decision');
+    if(JSON.stringify(summarizeDecisionTraces(hands))!==JSON.stringify(summarizeDecisionTraces(repeated)))fail('shadow diagnostic summary is not deterministic');
+    const sample=hands[0],withoutTrace=await evaluate(`window.__opponentDiagnostic.runHand(${sample.seed},${sample.offset},${JSON.stringify(sample.currentSeats)},false)`);
+    if(JSON.stringify({points:sample.points,plays:sample.plays})!==JSON.stringify({points:withoutTrace.points,plays:withoutTrace.plays}))
+      fail('shadow diagnostics changed gameplay or consumed production randomness');
     console.log(`standard-opponent-diagnostic: ${hands.length} deterministic hands passed`);
   }else console.log(JSON.stringify(summarize(hands),null,2));
 }
