@@ -7,18 +7,22 @@ export function createBelief({observerSeat,ownHand,playerCount=8}){
     observerSeat,playerCount,
     ownCards:new Map(ownHand.map(card=>[card.id,cloneCard(card)])),
     played:new Map(),knownHolders:new Map(),voids:Array.from({length:playerCount},()=>new Set()),
-    handSizes:Array(playerCount).fill(13)
+    handSizes:Array(playerCount).fill(13),passEvidence:{outgoing:[],incoming:[]}
   };
 }
 
 export function recordPass(belief,{outgoing=[],incoming=[],recipientSeat,sourceSeat}){
   for(const card of outgoing){
+    const copy=cloneCard(card);
     belief.ownCards.delete(card.id);
-    belief.knownHolders.set(card.id,{seat:recipientSeat,card:cloneCard(card),source:'passed'});
+    belief.knownHolders.set(card.id,{seat:recipientSeat,card:copy,source:'passed'});
+    belief.passEvidence.outgoing.push({seat:recipientSeat,card:copy});
   }
   for(const card of incoming){
-    belief.ownCards.set(card.id,cloneCard(card));
+    const copy=cloneCard(card);
+    belief.ownCards.set(card.id,copy);
     belief.knownHolders.delete(card.id);
+    belief.passEvidence.incoming.push({seat:sourceSeat,card:copy});
   }
   return belief;
 }
@@ -61,7 +65,7 @@ export function beliefSnapshot(belief,dangerous=[['S','Q'],['S','A'],['S','K']])
     suit,remainingBySuit[suit]-own.filter(card=>card.suit===suit).length
   ]));
   return {
-    observerSeat:belief.observerSeat,ownCards:own,played,
+    observerSeat:belief.observerSeat,ownCards:own,played,passEvidence:belief.passEvidence,
     knownVoids:Object.fromEntries(belief.voids.map((set,seat)=>[seat,[...set].sort()])),
     remainingBySuit,unseenToObserverBySuit,
     dangerousLocations:Object.fromEntries(dangerous.map(([suit,rank])=>[cardKey({suit,rank}),cardLocation(belief,suit,rank)]))
