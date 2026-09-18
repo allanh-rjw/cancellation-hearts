@@ -139,7 +139,7 @@ async function runScenario(port,baseUrl,scenario){
             if(area>0){const seat=card.closest('.seat');actionCollisions.push({button:id,seat:[...seat.classList].find(x=>/^seat-\\d+$/.test(x))??'unknown',area:Math.round(area),buttonRect:{x:Math.round(br.x),y:Math.round(br.y),w:Math.round(br.width),h:Math.round(br.height)},cardRect:{x:Math.round(cr.x),y:Math.round(cr.y),w:Math.round(cr.width),h:Math.round(cr.height)}});}
           }
         }
-        const opening=state.trickNumber===0?{dealer:state.dealer,currentPlayer:state.currentPlayer,leader:state.leader,openingLeadSuit:state.openingLeadSuit,openingAutoPlayers:[...(state.openingAutoPlayers??[])],trick:(state.trick??[]).map(x=>({player:x.player,rank:x.card?.rank,suit:x.card?.suit,cancelled:!!x.cancelled}))}:null;
+        const opening=state.trickNumber===0&&state.phase==='playing'?{dealer:state.dealer,currentPlayer:state.currentPlayer,leader:state.leader,openingLeadSuit:state.openingLeadSuit,openingAutoPlayers:[...(state.openingAutoPlayers??[])],trick:(state.trick??[]).map(x=>({player:x.player,rank:x.card?.rank,suit:x.card?.suit,cancelled:!!x.cancelled}))}:null;
         let action='wait';
         if(state.phase==='passing'){
           while(state.selected.size<3){const card=document.querySelector('#humanHand .card.playable');if(!card)break;card.click();}
