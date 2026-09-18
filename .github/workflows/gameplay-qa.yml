@@ -12,6 +12,8 @@ on:
       - scripts/verify-final-trick-cancellation.mjs
       - scripts/verify-standard-opponent-ai.mjs
       - scripts/diagnose-standard-opponent-ai.mjs
+      - scripts/opponent-belief-state.mjs
+      - scripts/verify-opponent-belief-state.mjs
       - scripts/verify-gameplay-simulation.mjs
       - scripts/verify-gameplay-simulation-qa.mjs
       - .github/workflows/gameplay-qa.yml
@@ -33,6 +35,8 @@ jobs:
           node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
+          node --input-type=module --check < scripts/opponent-belief-state.mjs
+          node --input-type=module --check < scripts/verify-opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
       - name: Verify final-trick full-cancellation rule
@@ -41,6 +45,8 @@ jobs:
         run: node scripts/verify-standard-opponent-ai.mjs
       - name: Verify deterministic opponent diagnostic harness
         run: node scripts/diagnose-standard-opponent-ai.mjs --verify
+      - name: Verify hidden-information opponent beliefs
+        run: node scripts/verify-opponent-belief-state.mjs
       - name: Run standard and Shoot-the-Moon gameplay simulations
         # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
         run: node scripts/verify-gameplay-simulation-qa.mjs
