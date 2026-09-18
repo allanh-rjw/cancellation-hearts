@@ -222,6 +222,8 @@ function confirmHumanPass(){
   for(let i=0;i<8;i++) for(const c of passes[i]) state.players[i].hand.splice(state.players[i].hand.findIndex(x=>x.id===c.id),1);
   for(let i=0;i<8;i++) state.players[(i+state.passOffset+8)%8].hand.push(...passes[i]);
   state.players.forEach(p=>sortHand(p.hand));
+  state.opponentPlans={};
+  for(let i=1;i<state.players.length;i++) opponentStrategyPlan(i);
   state.selected.clear();
   $('passPanel').classList.add('hidden');
   renderAll();
@@ -234,10 +236,12 @@ function choosePassCards(player){
   const prof=difficultyProfile();
   const playerIndex=state.players.indexOf(player);
   const metrics=humanHandMetrics(playerIndex);
-  const strategy=recommendedStrategy(metrics,playerIndex);
-  if(playerIndex>0&&state.mode==='standard') state.opponentPlans[playerIndex]={strategy,originalStrategy:strategy,voidCandidate:metrics.voidCandidate,partner:null,pivots:[],phase:'establish'};
+  const assessment=strategyAssessment(metrics,playerIndex),strategy=assessment.strategy;
+  if(playerIndex>0&&state.mode==='standard') state.opponentPlans[playerIndex]={strategy,originalStrategy:strategy,evidence:assessment.evidence,
+    facts:assessment.facts,voidCandidate:metrics.voidCandidate,target:assessment.facts.target,partner:null,pivots:[],phase:'establish'};
   const candidates=[...player.hand];
-  if(prof.lookahead<2) return candidates.sort((a,b)=>passScore(b,player.persona,suitCounts,player)-passScore(a,player.persona,suitCounts,player)).slice(0,3);
+  const baseline=[...candidates].sort((a,b)=>passScore(b,player.persona,suitCounts,player)-passScore(a,player.persona,suitCounts,player)).slice(0,3);
+  if(prof.lookahead<2) return baseline;
   // Hard/Expert evaluate complete three-card packages so the pass creates a coherent hand.
   let best=null;
   for(let a=0;a<candidates.length-2;a++)for(let b=a+1;b<candidates.length-1;b++)for(let d=b+1;d<candidates.length;d++){
@@ -255,7 +259,11 @@ function choosePassCards(player){
     if(player.persona==='The Moonshot') score-=remain.filter(c=>RANK_VALUE[c.rank]>=11).length*2;
     if(!best||score>best.score) best={set,score};
   }
-  return best?.set||candidates.slice(0,3);
+  if(!best)return baseline;
+  if(['soloMoon','twoMoon'].includes(strategy))return best.set;
+  const locked=baseline.slice(0,2);
+  const third=best.set.find(card=>!locked.some(x=>x.id===card.id))||baseline[2];
+  return [...locked,third];
 }
 function opponentPassStrategyScore(set,remain,strategy,voidCandidate){
   const penalties=set.reduce((n,c)=>n+cardPoints(c),0);
@@ -527,7 +535,7 @@ function min(a,b){return Math.min(a,b);}
 function chooseAiCard(i){
   const legal=legalCards(i), p=state.players[i], prof=difficultyProfile();
   const plan=opponentStrategyPlan(i);
-  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+standardTacticalAdjustment(i,c)+opponentStrategyAdjustment(i,c,plan)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
+  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+standardTacticalAdjustment(i,c)+opponentStrategyAdjustment(i,c,plan)+opponentPathwayAdjustment(i,c,plan)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
   const threat=practiceThreatState();
   if(state.difficulty==='easy' && !threat.credible) return legal[Math.floor(Math.random()*legal.length)];
   if(prof.blunder&&Math.random()<prof.blunder) return ranked[Math.min(1,ranked.length-1)].c;
@@ -540,25 +548,55 @@ function opponentStrategyPlan(i){
   const metrics=humanHandMetrics(i);
   let plan=state.opponentPlans[i];
   if(!plan){
-    const strategy=recommendedStrategy(metrics,i);
-    plan=state.opponentPlans[i]={strategy,originalStrategy:strategy,voidCandidate:metrics.voidCandidate,partner:null,pivots:[]};
+    const assessment=strategyAssessment(metrics,i);
+    plan=state.opponentPlans[i]={strategy:assessment.strategy,originalStrategy:assessment.strategy,evidence:assessment.evidence,
+      facts:assessment.facts,voidCandidate:metrics.voidCandidate,target:assessment.facts.target,partner:null,pivots:[]};
   }
   const collectors=currentPenaltyCollectors();
-  let next=plan.strategy;
+  let next=plan.strategy,reason='';
   if(plan.strategy==='soloMoon'){
     const outsiders=collectors.filter(x=>x.i!==i);
-    if(outsiders.length===1) { next='twoMoon'; plan.partner=outsiders[0].i; }
-    if(outsiders.length>1) next='avoidance';
+    if(outsiders.length===1) { next='twoMoon'; plan.partner=outsiders[0].i; reason='An outside scorer ended the solo moon but preserved a two-player moon.'; }
+    if(outsiders.length>1) { next='avoidance'; reason='Points reached more than two collectors, ending every moon route.'; }
   } else if(plan.strategy==='twoMoon'){
     if(plan.partner==null) plan.partner=collectors.find(x=>x.i!==i)?.i??null;
-    if(collectors.some(x=>x.i!==i&&x.i!==plan.partner)) next='avoidance';
+    if(collectors.some(x=>x.i!==i&&x.i!==plan.partner)) { next='avoidance'; reason='A third collector ended the two-player moon.'; }
+  } else if(plan.strategy==='targeting'&&state.trickNumber>=6){
+    const targetTotal=state.players[plan.target]?.score+state.players[plan.target]?.roundPoints;
+    const lowestOther=Math.min(...state.players.map((p,idx)=>idx===i?Infinity:p.score+p.roundPoints));
+    const intendedVoidRemaining=metrics.counts[plan.voidCandidate];
+    if(plan.target==null||targetTotal>lowestOther+8||(metrics.control<2&&intendedVoidRemaining>2)){
+      next='avoidance'; reason='The original target or the control-and-void pathway no longer exists.';
+    }
+  } else if(plan.strategy==='cancellation'&&state.trickNumber>=7){
+    const liveHighPairs=metrics.pairs.filter(x=>['10','J','Q','K','A'].some(r=>x.startsWith(r))).length;
+    if(metrics.pairs.length<2||liveHighPairs===0){
+      next='avoidance'; reason='Too little useful paired structure remains for cancellation to organize the hand.';
+    }
   }
   if(next!==plan.strategy){
-    plan.pivots.push({from:plan.strategy,to:next,trick:state.trickNumber+1});
+    plan.pivots.push({from:plan.strategy,to:next,trick:state.trickNumber+1,reason});
     plan.strategy=next;
+    plan.evidence=[reason];
   }
-  plan.phase=state.trickNumber<4?'establish':state.trickNumber<9?'execute':'exit';
+  refreshOpponentPathway(i,plan,metrics);
   return plan;
+}
+function refreshOpponentPathway(i,plan,metrics){
+  const voidReady=metrics.counts[plan.voidCandidate]===0;
+  const phase=!voidReady&&state.trickNumber<4?'establish':state.trickNumber<9?'execute':'exit';
+  if(plan.phase&&plan.phase!==phase)(plan.transitions??=[]).push({from:plan.phase,to:phase,trick:state.trickNumber+1});
+  const entries=metrics.hand.filter(c=>RANK_VALUE[c.rank]>=11&&!duplicateLiveFor(c,i)).sort((a,b)=>RANK_VALUE[b.rank]-RANK_VALUE[a.rank]);
+  const exits=metrics.exits.filter(c=>c.suit!=='H').sort((a,b)=>RANK_VALUE[a.rank]-RANK_VALUE[b.rank]);
+  const objectives={
+    avoidance:voidReady?'shed future winners while preserving an exit':`complete the ${plan.voidCandidate} void without taking loaded control`,
+    targeting:voidReady?'preserve an entry until points can reach the target':`complete the ${plan.voidCandidate} void before attempting delivery`,
+    cancellation:'change the winner only through a calculated favorable cancellation',
+    soloMoon:'retain continuous control of every penalty-bearing trick',
+    twoMoon:'keep every penalty-bearing trick inside the two-player group'
+  };
+  plan.phase=phase;
+  plan.pathway={objective:objectives[plan.strategy],voidReady,entryId:entries[0]?.id??null,exitId:exits[0]?.id??null};
 }
 function opponentStrategyAdjustment(i,c,plan){
   if(!plan) return 0;
@@ -567,7 +605,7 @@ function opponentStrategyAdjustment(i,c,plan){
   const handAfter=state.players[i].hand.filter(x=>x.id!==c.id);
   const createsVoid=!handAfter.some(x=>x.suit===c.suit);
   const safeLoss=projected!==i;
-  const target=state.players.reduce((best,p,idx)=>idx===i||p.score+p.roundPoints>=state.players[best].score+state.players[best].roundPoints?best:idx,i===0?1:0);
+  const target=plan.target??state.players.reduce((best,p,idx)=>idx===i||p.score+p.roundPoints>=state.players[best].score+state.players[best].roundPoints?best:idx,i===0?1:0);
   let s=0;
   if(plan.strategy==='avoidance'){
     if(points) s+=safeLoss?18:-28-points*2;
@@ -593,6 +631,39 @@ function opponentStrategyAdjustment(i,c,plan){
   if(plan.phase==='establish'&&createsVoid) s+=6;
   if(plan.phase==='exit'&&safeLoss&&rank>=8) s+=8;
   return s*Math.min(1.5,prof.lookahead/3);
+}
+function opponentPathwayAdjustment(i,c,plan){
+  if(!plan||difficultyProfile().lookahead<2)return 0;
+  const legal=legalCards(i),rank=RANK_VALUE[c.rank],projected=currentWinningPlayerIfPlayed(c,i);
+  const outcomes=legal.map(card=>({card,winner:currentWinningPlayerIfPlayed(card,i)}));
+  const losing=outcomes.filter(x=>x.winner!==i),safeLoss=projected!==i;
+  const points=state.carryoverPoints+state.trick.reduce((n,x)=>n+cardPoints(x.card),0)+cardPoints(c);
+  const handAfter=state.players[i].hand.filter(x=>x.id!==c.id);
+  const completesVoid=c.suit===plan.voidCandidate&&!handAfter.some(x=>x.suit===plan.voidCandidate);
+  const pairKeepsControl=plan.strategy==='twoMoon'&&(projected===i||projected===plan.partner);
+  const shooting=['soloMoon','twoMoon'].includes(plan.strategy);
+  let score=0;
+  if(plan.phase==='establish'&&c.suit===plan.voidCandidate&&safeLoss)score+=completesVoid?24:9;
+  if(!shooting&&!points&&projected===i&&losing.length&&!completesVoid)score-=plan.phase==='execute'?24:16;
+  if(plan.strategy==='twoMoon'&&!points&&pairKeepsControl)score+=10;
+  if(safeLoss&&losing.length){
+    const highestSafe=Math.max(...losing.map(x=>RANK_VALUE[x.card.rank]));
+    score+=(rank-highestSafe)*2.4;
+    if(c.id===plan.pathway?.exitId&&highestSafe>rank)score-=14;
+  }
+  if(c.id===plan.pathway?.entryId&&!points&&losing.length&&!completesVoid)score-=12;
+  if(plan.phase==='exit'&&safeLoss)score+=rank*1.5;
+  if(plan.strategy==='targeting'&&points){
+    if(projected===plan.target)score+=30;
+    else if(projected!==i)score-=10;
+  }
+  if(plan.strategy==='cancellation'&&state.trick.some(x=>x.card.suit===c.suit&&x.card.rank===c.rank)){
+    const led=currentLedSuit(),eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
+    const before=eligible.length?eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player:null;
+    if(projected===i&&before!==i&&points)score-=24;
+    else if(projected!==i&&projected!==before)score+=12;
+  }
+  return score*Math.min(1.5,difficultyProfile().lookahead/3);
 }
 function standardTacticalAdjustment(i,c){
   if(state.mode!=='standard'||state.trick.length!==state.players.length-1) return 0;
@@ -905,14 +976,29 @@ function bestVoidCandidate(m){
   return ordered[0];
 }
 function recommendedStrategy(m,playerIndex=0){
-  const strongHearts=m.hearts.length>=5&&m.hearts.filter(c=>RANK_VALUE[c.rank]>=10).length>=3;
-  const broadControl=SUITS.filter(s=>m.hand.some(c=>c.suit===s&&RANK_VALUE[c.rank]>=13)).length;
-  if(m.control>=8&&strongHearts&&broadControl>=3) return 'soloMoon';
-  if(m.control>=6&&m.hearts.length>=4) return 'twoMoon';
-  if(m.pairs.length>=3) return 'cancellation';
-  const scoreLead=state.players.length&&state.players[playerIndex].score===Math.min(...state.players.map(p=>p.score));
-  if(!scoreLead&&m.control>=4) return 'targeting';
-  return 'avoidance';
+  return strategyAssessment(m,playerIndex).strategy;
+}
+function strategyAssessment(m,playerIndex=0){
+  const highHearts=m.hearts.filter(c=>RANK_VALUE[c.rank]>=10).length;
+  const suitControl=SUITS.filter(s=>m.hand.some(c=>c.suit===s&&RANK_VALUE[c.rank]>=13)).length;
+  const highPairs=m.pairs.filter(x=>['10','J','Q','K','A'].some(r=>x.startsWith(r))).length;
+  const shortSuit=m.counts[m.voidCandidate];
+  const spades=spadeVulnerability(m).level;
+  const totals=state.players.map(p=>p.score+p.roundPoints);
+  const targets=totals.map((total,i)=>({i,total})).filter(x=>x.i!==playerIndex).sort((a,b)=>a.total-b.total);
+  const target=targets[0]?.i??null;
+  const targetGap=target==null?0:totals[playerIndex]-totals[target];
+  const facts={control:m.control,highHearts,suitControl,exits:m.exits.length,pairs:m.pairs.length,highPairs,shortSuit,spades,target,targetGap};
+  const result=(strategy,evidence)=>({strategy,evidence,facts});
+  if(m.control>=9&&m.hearts.length>=5&&highHearts>=4&&suitControl>=3&&m.exits.length<=4&&spades!=='severe')
+    return result('soloMoon',['continuous high-card control','four or more high hearts','control in at least three suits','limited forced exits']);
+  if(m.control>=7&&m.hearts.length>=4&&highHearts>=2&&suitControl>=2&&m.exits.length<=6&&spades!=='severe')
+    return result('twoMoon',['substantial control','a high-heart base','control in multiple suits','manageable exits']);
+  if(m.pairs.length>=3&&highPairs>=1&&m.exits.length>=2)
+    return result('cancellation',['at least three exact pairs','a high pair that changes control','two or more exits']);
+  if(targetGap>=8&&m.control>=4&&shortSuit<=1&&m.exits.length>=2)
+    return result('targeting',[`score target at seat ${target+1}`,`target trails by ${targetGap} points`,'controllable winners','void access','two or more exits']);
+  return result('avoidance',['no aggressive strategy met all prerequisites','preserve flexibility and minimize penalty exposure']);
 }
 function bullets(...xs){return `<ul>${xs.map(x=>`<li>${x}</li>`).join('')}</ul>`;}
 function moonPracticeAssessment(m){
