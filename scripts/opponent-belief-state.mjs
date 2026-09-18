@@ -37,6 +37,19 @@ export function recordPlay(belief,{seat,card,ledSuit}){
   return belief;
 }
 
+function probabilityView(belief,possibleSeats,unknownCopies){
+  if(!unknownCopies||!possibleSeats.length)return {seatProbabilities:{},expectedCopiesBySeat:{}};
+  const capacity=possibleSeats.reduce((sum,seat)=>sum+belief.handSizes[seat],0);
+  const denominator=capacity||possibleSeats.length;
+  const seatProbabilities=Object.fromEntries(possibleSeats.map(seat=>[
+    seat,(capacity?belief.handSizes[seat]:1)/denominator
+  ]));
+  const expectedCopiesBySeat=Object.fromEntries(possibleSeats.map(seat=>[
+    seat,seatProbabilities[seat]*unknownCopies
+  ]));
+  return {seatProbabilities,expectedCopiesBySeat};
+}
+
 export function cardLocation(belief,suit,rank){
   const own=[...belief.ownCards.values()].filter(card=>card.suit===suit&&card.rank===rank);
   const played=[...belief.played.values()].filter(x=>x.card.suit===suit&&x.card.rank===rank);
@@ -51,7 +64,23 @@ export function cardLocation(belief,suit,rank){
   }
   return {
     key:`${rank}${suit}`,own:own.length,played:played.map(x=>x.seat),
-    knownHolders:known.map(x=>x.seat),unknownCopies,possibleSeats
+    knownHolders:known.map(x=>x.seat),unknownCopies,possibleSeats,
+    ...probabilityView(belief,possibleSeats,unknownCopies)
+  };
+}
+
+export function locationDiagnostic(location,trueUnknownHolderSeats=[]){
+  if(trueUnknownHolderSeats.length!==location.unknownCopies){
+    throw new Error(`truth count ${trueUnknownHolderSeats.length} != unknown copies ${location.unknownCopies}`);
+  }
+  const probabilities=Object.values(location.seatProbabilities);
+  const expected=Object.values(location.expectedCopiesBySeat);
+  const truthMass=trueUnknownHolderSeats.map(seat=>location.seatProbabilities[seat]??0);
+  return {
+    probabilitySum:probabilities.reduce((sum,value)=>sum+value,0),
+    expectedCopySum:expected.reduce((sum,value)=>sum+value,0),
+    meanTrueSeatProbability:truthMass.length?truthMass.reduce((sum,value)=>sum+value,0)/truthMass.length:null,
+    impossibleTruthCount:truthMass.filter(value=>value===0).length
   };
 }
 
