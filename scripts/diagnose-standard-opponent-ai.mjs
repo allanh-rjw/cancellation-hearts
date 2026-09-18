@@ -262,6 +262,15 @@ function confidence95(values){
   const margin=1.96*Math.sqrt(variance/values.length);
   return [mean-margin,mean+margin];
 }
+function firstDifference(a,b,path='summary'){
+  if(Object.is(a,b))return null;
+  if(!a||!b||typeof a!=='object'||typeof b!=='object')return {path,a,b};
+  for(const key of new Set([...Object.keys(a),...Object.keys(b)])){
+    const difference=firstDifference(a[key],b[key],`${path}.${key}`);
+    if(difference)return difference;
+  }
+  return null;
+}
 function summarizeDecisionTraces(hands){
   const traces=hands.flatMap(hand=>hand.decisionTraces.map(row=>({...row,offset:hand.offset})));
   const summarize=rows=>({decisions:rows.length,disagreements:rows.filter(x=>!x.agreement).length,
@@ -326,7 +335,8 @@ async function executeDiagnostic(evaluate){
     if(hands.some(hand=>hand.points.reduce((sum,x)=>sum+x,0)!==52))fail('a diagnostic hand did not account for 52 points');
     if(hands.some(hand=>hand.metrics.current.decisions!==52||hand.metrics.legacy.decisions!==52))fail('a diagnostic hand did not record 104 decisions');
     if(hands.some(hand=>hand.decisionTraces.length!==52))fail('a diagnostic hand did not trace every current-policy decision');
-    if(JSON.stringify(summarizeDecisionTraces(hands))!==JSON.stringify(summarizeDecisionTraces(repeated)))fail('shadow diagnostic summary is not deterministic');
+    const summaryDifference=firstDifference(summarizeDecisionTraces(hands),summarizeDecisionTraces(repeated));
+    if(summaryDifference)fail(`shadow diagnostic summary is not deterministic: ${JSON.stringify(summaryDifference)}`);
     const sample=hands[0],withoutTrace=await evaluate(`window.__opponentDiagnostic.runHand(${sample.seed},${sample.offset},${JSON.stringify(sample.currentSeats)},false)`);
     if(JSON.stringify({points:sample.points,plays:sample.plays})!==JSON.stringify({points:withoutTrace.points,plays:withoutTrace.plays}))
       fail('shadow diagnostics changed gameplay or consumed production randomness');
