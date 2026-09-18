@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
-const source=readFileSync(new URL('../gameplay-standard-fixes.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../gameplay-opponent-lookahead.js',import.meta.url),'utf8');
 const start=source.indexOf('// MULTI-TRICK OPPONENT LOOKAHEAD START');
 const end=source.indexOf('// MULTI-TRICK OPPONENT LOOKAHEAD END');
 assert.ok(start>=0&&end>start,'multi-trick lookahead block missing');
