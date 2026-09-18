@@ -16,12 +16,12 @@ const guarded=(seat,target)=>new Proxy(target,{get(obj,key){
   return obj[key];
 }});
 const players=Array.from({length:8},(_,seat)=>guarded(seat,seat===1?own:{roundPoints:seat===4?12:0,persona:'CPU'}));
-const legal=[ace,two];
+let legal=[ace,two];
 const belief={observerSeat:1,ownCards:own.hand,handSizes:[4,4,4,4,4,4,4,4],voids:Array.from({length:8},()=>new Set())};
 const context={
-  window:{},state:{mode:'standard',difficulty:'expert',players,trick:[],trickNumber:5,carryoverPoints:0,heartsBroken:false},
+  window:{},state:{mode:'standard',difficulty:'expert',players,trick:[],trickNumber:5,carryoverPoints:0,heartsBroken:false,passOffset:1},
   chooseAiCard:()=>ace,legalCards:()=>legal,difficultyProfile:()=>({blunder:0,noise:0}),
-  opponentStrategyPlan:()=>({strategy:'avoidance',voidCandidate:'D'}),
+  opponentStrategyPlan:()=>({strategy:'avoidance',phase:'execute',voidCandidate:'D'}),
   evaluateCard:()=>0,practiceDefenseAdjustment:()=>0,standardTacticalAdjustment:()=>0,
   opponentStrategyAdjustment:()=>0,opponentPathwayAdjustment:()=>0,futureHandScore:()=>0,
   scoreAwareAdjustment:()=>0,advancedInferenceAdjustment:()=>0,traceOpponentDecision:()=>{},
@@ -45,6 +45,25 @@ assert.ok(trace.ranked.some(row=>Math.abs(row.lookahead)>0),'lookahead did not a
 assert.ok(trace.ranked.every(row=>Number.isFinite(row.total)),'lookahead produced a non-finite score');
 assert.ok(trace.ranked.some(row=>row.nextLead),'lookahead did not record a projected continuation lead');
 
+context.beliefAwareProjectedWinner=(_seat,c)=>c.id==='d4'?1:0;
+legal=[d4,c5];
+context.state.passOffset=4;
+const acrossLead=context.window.__opponentLookahead.scoreCard(1,d4);
+assert.ok(acrossLead.discipline<0,'across-pass tuning did not penalize avoidable point-free lead acquisition');
+context.state.passOffset=2;
+const twoLeftLead=context.window.__opponentLookahead.scoreCard(1,d4);
+assert.ok(Math.abs(acrossLead.discipline)>Math.abs(twoLeftLead.discipline),'weak pass direction should receive stronger lead discipline');
+
+legal=[two,c5];
+context.beliefAwareProjectedWinner=()=>0;
+context.state.passOffset=0;
+const heldHighExit=context.window.__opponentLookahead.scoreCard(1,c5);
+const heldLowExit=context.window.__opponentLookahead.scoreCard(1,two);
+assert.ok(heldHighExit.discipline>heldLowExit.discipline,'hold tuning did not preserve the lower safe exit');
+
+context.window.__opponentLookahead.prompt5Enabled=false;
+assert.equal(context.window.__opponentLookahead.scoreCard(1,c5).discipline,0,'Prompt 5 rollback did not restore Prompt 4 scoring');
+context.window.__opponentLookahead.prompt5Enabled=true;
 context.state.difficulty='hard';
 assert.equal(context.window.__opponentLookahead.depth(),1,'Hard should use one-step continuation');
 context.window.__opponentLookahead.enabled=false;
@@ -53,4 +72,4 @@ context.window.__opponentLookahead.enabled=true;
 context.state.difficulty='medium';
 assert.equal(context.chooseAiCard(1).id,'sa','Medium should remain on the Prompt 3 policy');
 
-console.log('opponent-lookahead: horizon, hidden-information, ranking, difficulty, and rollback checks passed');
+console.log('opponent-lookahead: horizon, hidden-information, Prompt 5 discipline, difficulty, and rollback checks passed');
