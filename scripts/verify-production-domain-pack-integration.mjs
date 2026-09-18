@@ -34,11 +34,13 @@ for(const signature of [
   "function currentTrickStatus()",
   "function renderCoach()",
   "function startFirstTrick()",
+  "function firstTwoClubsHolderLeftOfDealer()",
   "function updateCancellation()",
-  "state.leader=(state.dealer+1)%8;",
-  "state.openingAutoPlayers.add(i);",
-  "while(state.openingAutoPlayers.has(state.currentPlayer)) state.currentPlayer=(state.currentPlayer+1)%8;",
-  "if(card.suit==='H' && currentLedSuit()) state.heartsBroken=true;",
+  "state.leader=firstTwoClubsHolderLeftOfDealer();",
+  "state.openingLeadSuit='C';",
+  "if(twoClubs.length) return twoClubs;",
+  "function heartDiscardBreaks(card,ledSuit)",
+  "if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;",
   "state.carryoverPoints+=trickPoints;"
 ])assert.ok(appSource.includes(signature),`real app rule boundary changed: ${signature}`);
 
@@ -48,7 +50,10 @@ for(const signature of [
 assert.equal(cancellationHeartsRules.deckCount,2);
 assert.equal(cancellationHeartsRules.playerCount,8);
 assert.equal(cancellationHeartsRules.queenOfSpadesPoints,13);
-assert.equal(cancellationHeartsRules.openingLead,"player-left-of-dealer-with-both-two-of-clubs-preplayed");
+assert.ok([
+  "player-left-of-dealer-with-both-two-of-clubs-preplayed",
+  "first-two-clubs-holder-clockwise-from-dealer-one-card-per-seat"
+].includes(cancellationHeartsRules.openingLead),"unsupported Domain Pack opening rule during coordinated cutover");
 assert.deepEqual(Array.from({length:8},(_,i)=>passOffsetForHand(i)),[1,-1,2,-2,3,-3,4,0]);
 assert.equal(firstSeatLeftOfDealer(7),0);
 assert.equal(firstSeatLeftOfDealer(3),4);

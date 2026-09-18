@@ -166,26 +166,6 @@ function beginRound(){
   }
 }
 
-function ensureTwoClubsSeparated(){
-  const holders=[];
-  state.players.forEach((p,i)=>{
-    const count=p.hand.filter(c=>c.suit==='C'&&c.rank==='2').length;
-    for(let n=0;n<count;n++) holders.push(i);
-  });
-  if(holders.length!==2 || holders[0]!==holders[1]) return;
-  const source=holders[0];
-  const target=(source+1+Math.floor(Math.random()*7))%8;
-  const twoIndex=state.players[source].hand.findIndex((c,idx)=>c.suit==='C'&&c.rank==='2' && idx!==state.players[source].hand.findIndex(x=>x.suit==='C'&&x.rank==='2'));
-  const swapIndex=state.players[target].hand.findIndex(c=>!(c.suit==='C'&&c.rank==='2'));
-  if(twoIndex>=0&&swapIndex>=0){
-    const two=state.players[source].hand.splice(twoIndex,1)[0];
-    const swap=state.players[target].hand.splice(swapIndex,1)[0];
-    state.players[source].hand.push(swap);
-    state.players[target].hand.push(two);
-  }
-}
-
-
 function takeSpecific(deck,suit,rank){
   const i=deck.findIndex(c=>c.suit===suit&&c.rank===rank);
   return i>=0?deck.splice(i,1)[0]:null;
@@ -293,26 +273,21 @@ function passScore(c,p,suitCounts,player){
 function startFirstTrick(){
   state.phase='playing';
   state.trickNumber=0;
-  state.leader=(state.dealer+1)%8;
+  state.leader=firstTwoClubsHolderLeftOfDealer();
   state.currentPlayer=state.leader;
   state.trick=[];
   state.openingAutoPlayers=new Set();
-  state.openingLeadSuit=null;
-  // Both 2♣ cards are placed face-up before normal play begins. Their holders
-  // have already contributed a card to the opening trick and skip their turn.
-  state.players.forEach((p,i)=>{
-    const twos=p.hand.filter(c=>c.suit==='C'&&c.rank==='2');
-    for(const card of twos){
-      p.hand.splice(p.hand.findIndex(x=>x.id===card.id),1);
-      state.trick.push({player:i,card,cancelled:false,prelaid:true});
-      state.openingAutoPlayers.add(i);
-    }
-  });
-  updateCancellation();
-  while(state.openingAutoPlayers.has(state.currentPlayer)) state.currentPlayer=(state.currentPlayer+1)%8;
+  state.openingLeadSuit='C';
   renderAll();
-  setStatus(`Both 2♣ cards are down. ${state.players[state.leader].name}, immediately left of the dealer, starts the opening trick.`);
+  setStatus(`${state.players[state.leader].name} has the first 2♣ clockwise from the dealer and leads one copy.`);
   continueTurn();
+}
+function firstTwoClubsHolderLeftOfDealer(){
+  for(let n=1;n<=state.players.length;n++){
+    const i=(state.dealer+n)%state.players.length;
+    if(state.players[i].hand.some(c=>c.suit==='C'&&c.rank==='2')) return i;
+  }
+  throw new Error('Opening trick requires at least one 2♣');
 }
 function startTrick(){ state.trick=[]; state.currentTrickAward=null; state.phase='playing'; state.currentPlayer=state.leader; state.openingLeadSuit=null; renderAll(); continueTurn(); }
 function continueTurn(){
@@ -328,9 +303,16 @@ function currentLedSuit(){
   if(state.trickNumber===0) return state.openingLeadSuit;
   return state.trick[0]?.card.suit||null;
 }
+function heartDiscardBreaks(card,ledSuit){
+  return card.suit==='H'&&!!ledSuit&&ledSuit!=='H';
+}
 
 function legalCards(playerIndex){
   const hand=state.players[playerIndex].hand;
+  if(state.trickNumber===0){
+    const twoClubs=hand.filter(c=>c.suit==='C'&&c.rank==='2');
+    if(twoClubs.length) return twoClubs;
+  }
   if(!currentLedSuit()){
     let legal=hand;
     if(!state.heartsBroken){ const nonHearts=hand.filter(c=>c.suit!=='H'); if(nonHearts.length) legal=nonHearts; }
@@ -356,7 +338,7 @@ function playCard(playerIndex,card){
   const p=state.players[playerIndex];
   p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
   if(state.trickNumber===0 && !state.openingLeadSuit) state.openingLeadSuit=card.suit;
-  if(card.suit==='H' && currentLedSuit()) state.heartsBroken=true;
+  if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;
   state.trick.push({player:playerIndex,card,cancelled:false});
   updateCancellation();
   state.currentPlayer=(state.currentPlayer+1)%8;
@@ -1035,7 +1017,7 @@ function moonTacticalPlan(m){
   const hand=[...m.hand];
   const suitCards=s=>hand.filter(c=>c.suit===s).sort((a,b)=>RANK_VALUE[b.rank]-RANK_VALUE[a.rank]);
   const topBySuit=Object.fromEntries(SUITS.map(s=>[s,suitCards(s)]));
-  const openingTwo=hand.find(c=>c.suit==='C'&&c.rank==='2');
+  const openingTwos=hand.filter(c=>c.suit==='C'&&c.rank==='2');
   const strongest=[...SUITS].sort((a,b)=>{
     const aa=topBySuit[a].filter(c=>RANK_VALUE[c.rank]>=11).length;
     const bb=topBySuit[b].filter(c=>RANK_VALUE[c.rank]>=11).length;
@@ -1050,8 +1032,9 @@ function moonTacticalPlan(m){
   const queen=m.queens[0];
   const queenDup=queen?externalDuplicateStatus(queen):null;
   const steps=[];
-  if(openingTwo){
-    steps.push(`<strong>Win or recover from the opening:</strong> your forced 2♣ cannot win because the other 2♣ cancels it. Watch which uncancelled club takes the trick, then plan how you will regain the lead through ${topBySuit[strongest].slice(0,2).map(cardLabel).join(' or ')||'your strongest suit'}.`);
+  if(openingTwos.length){
+    const outcome=openingTwos.length===2?'you will lead one copy and keep the other because every player contributes exactly one card':`the other copy cancels yours only if a different player holds it and is forced to play it`;
+    steps.push(`<strong>Win or recover from the opening:</strong> ${outcome}. Watch which uncancelled club takes the trick, then plan how you will regain the lead through ${topBySuit[strongest].slice(0,2).map(cardLabel).join(' or ')||'your strongest suit'}.`);
   } else {
     const openingControl=topBySuit.C.filter(c=>RANK_VALUE[c.rank]>=12).map(cardLabel);
     steps.push(`<strong>Contest the first trick:</strong> ${openingControl.length?`use your club control (${openingControl.join(', ')}) if the cancellation pattern lets you win`:`you lack top club control, so identify the winner and preserve a reliable entry in ${suitName(strongest)}`}. The immediate goal is control of the second lead, not merely collecting a point-free trick.`);

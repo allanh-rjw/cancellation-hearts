@@ -170,7 +170,13 @@ async function runScenario(port,baseUrl,scenario){
       const snapshot=JSON.parse(raw);
       snapshots.push(snapshot);
       stateChecks(snapshot,label);
-      if(snapshot.opening&&snapshot.opening.openingAutoPlayers.length)openingObservations.push(snapshot.opening);
+      if(snapshot.opening){
+        const plays=snapshot.opening.trick;
+        if(snapshot.opening.openingLeadSuit!=='C')fail(`${label}: opening led suit was not clubs`);
+        if(plays.length&&(plays[0].rank!=='2'||plays[0].suit!=='C'))fail(`${label}: opening trick did not begin with 2♣`);
+        if(new Set(plays.map(x=>x.player)).size!==plays.length)fail(`${label}: a player contributed more than one opening-trick card`);
+        if(plays.length)openingObservations.push(snapshot.opening);
+      }
       for(const c of snapshot.actionCollisions)collisions.push(c);
       const signature=JSON.stringify([snapshot.phase,snapshot.currentPlayer,snapshot.trickNumber,snapshot.trickLength,snapshot.handSizes,snapshot.scoreHistoryLength,snapshot.practiceEnded,snapshot.gameOver,snapshot.status,snapshot.action]);
       if(signature!==lastSignature){lastSignature=signature;lastChange=Date.now();}

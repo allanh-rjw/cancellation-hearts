@@ -30,31 +30,13 @@ function gameplayAllHandsEmpty(){
 startFirstTrick=function(){
   state.phase='playing';
   state.trickNumber=0;
-  const nominalLeader=(state.dealer+1)%8;
-  state.leader=nominalLeader;
-  state.currentPlayer=nominalLeader;
+  state.leader=firstTwoClubsHolderLeftOfDealer();
+  state.currentPlayer=state.leader;
   state.trick=[];
   state.openingAutoPlayers=new Set();
-  state.openingLeadSuit=null;
-
-  state.players.forEach((p,i)=>{
-    const twos=p.hand.filter(c=>c.suit==='C'&&c.rank==='2');
-    for(const card of twos){
-      p.hand.splice(p.hand.findIndex(x=>x.id===card.id),1);
-      state.trick.push({player:i,card,cancelled:false,prelaid:true});
-      state.openingAutoPlayers.add(i);
-    }
-  });
-  updateCancellation();
-
-  const actual=gameplayNextEligibleSeat(nominalLeader);
-  if(actual===null){
-    finishTrick();
-    return;
-  }
-  state.currentPlayer=actual;
+  state.openingLeadSuit='C';
   renderAll();
-  setStatus(`Both 2♣ cards are down. ${state.players[actual].name}, the next eligible player clockwise from the dealer, leads the first playable card.`);
+  setStatus(`${state.players[state.leader].name} has the first 2♣ clockwise from the dealer and leads one copy.`);
   continueTurn();
 };
 
@@ -121,11 +103,7 @@ playCard=function(playerIndex,card){
   playCardSound();
   const p=state.players[playerIndex];
   p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
-  if(state.trickNumber===0&&!state.openingLeadSuit){
-    state.openingLeadSuit=card.suit;
-    state.leader=playerIndex;
-  }
-  if(card.suit==='H'&&currentLedSuit()) state.heartsBroken=true;
+  if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;
   state.trick.push({player:playerIndex,card,cancelled:false});
   updateCancellation();
   state.currentPlayer=(state.currentPlayer+1)%8;

@@ -82,7 +82,7 @@ playCard = function(playerIndex,card){
   const p=state.players[playerIndex];
   p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
   if(state.trickNumber===0 && !state.openingLeadSuit) state.openingLeadSuit=card.suit;
-  if(card.suit==='H' && currentLedSuit()) state.heartsBroken=true;
+  if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;
   state.trick.push({player:playerIndex,card,cancelled:false});
   updateCancellation();
   state.currentPlayer=(state.currentPlayer+1)%8;
@@ -109,6 +109,6 @@ renderTrick = function(){
   const seats=qaTrickParticipantCount();
   const physical=state.trick.length;
   const eligible=qaEligibleSeatCount();
-  const physicalNote=physical!==seats?` · ${physical} physical cards because one seat held both 2♣ cards`:'';
+  const physicalNote=physical!==seats?` · ${physical} physical cards`:'';
   $('trick').innerHTML=`<div class="trick-summary">${seats} of ${eligible} active seats contributed${physicalNote}${carry}</div>`;
 };
