@@ -1,0 +1,32 @@
+name: Prompt 5 Large Simulation
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/prompt5-large-simulation.yml
+  workflow_dispatch:
+
+jobs:
+  prompt5-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run large Prompt 3/4/5 paired campaign
+        run: node scripts/diagnose-opponent-lookahead.mjs --deals=24 --cycle=full --seed-base=2026121800
+      - name: Run large Prompt 5 vs legacy campaign
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/diagnose-standard-opponent-ai.mjs')
+          source=path.read_text()
+          old="['app.js','gameplay-standard-fixes.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          new="['app.js','gameplay-standard-fixes.js','gameplay-opponent-lookahead.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          if old not in source:
+              raise SystemExit('standard diagnostic source list changed')
+          path.write_text(source.replace(old,new,1))
+          PY
+          node scripts/diagnose-standard-opponent-ai.mjs --deals=24 --cycle=full --seed-base=2026131800
