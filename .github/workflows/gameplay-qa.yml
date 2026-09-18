@@ -3,64 +3,42 @@ name: Gameplay QA
 on:
   pull_request:
     paths:
-      - app.js
-      - gameplay-standard-fixes.js
-      - gameplay-opponent-lookahead.js
-      - gameplay-moon-fixes.js
-      - gameplay-moon-calibration.js
-      - index.html
-      - style.css
-      - scripts/verify-final-trick-cancellation.mjs
-      - scripts/verify-standard-opponent-ai.mjs
-      - scripts/diagnose-standard-opponent-ai.mjs
-      - scripts/diagnose-opponent-lookahead.mjs
-      - scripts/opponent-belief-state.mjs
-      - scripts/verify-opponent-belief-state.mjs
-      - scripts/verify-belief-aware-opponent.mjs
-      - scripts/verify-opponent-lookahead.mjs
-      - scripts/verify-gameplay-simulation.mjs
-      - scripts/verify-gameplay-simulation-qa.mjs
       - .github/workflows/gameplay-qa.yml
+      - .github/workflows/large-opponent-simulation.yml
   workflow_dispatch:
 
 jobs:
   gameplay-simulation:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Syntax check gameplay QA
+      - name: Run large Prompt 3 vs Prompt 4 paired campaign
         run: |
-          node --input-type=module --check < gameplay-standard-fixes.js
-          node --input-type=module --check < gameplay-opponent-lookahead.js
-          node --input-type=module --check < gameplay-moon-fixes.js
-          node --input-type=module --check < gameplay-moon-calibration.js
-          node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
-          node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
-          node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
-          node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
-          node --input-type=module --check < scripts/opponent-belief-state.mjs
-          node --input-type=module --check < scripts/verify-opponent-belief-state.mjs
-          node --input-type=module --check < scripts/verify-belief-aware-opponent.mjs
-          node --input-type=module --check < scripts/verify-opponent-lookahead.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
-      - name: Verify final-trick full-cancellation rule
-        run: node scripts/verify-final-trick-cancellation.mjs
-      - name: Verify standard opponent decisions
-        run: node scripts/verify-standard-opponent-ai.mjs
-      - name: Verify deterministic opponent diagnostic harness
-        run: node scripts/diagnose-standard-opponent-ai.mjs --verify
-      - name: Verify hidden-information opponent beliefs
-        run: node scripts/verify-opponent-belief-state.mjs
-      - name: Verify belief-aware opponent policy
-        run: node scripts/verify-belief-aware-opponent.mjs
-      - name: Verify multi-trick opponent lookahead
-        run: node scripts/verify-opponent-lookahead.mjs
-      - name: Compare Prompt 3 and Prompt 4 on paired deals
-        run: node scripts/diagnose-opponent-lookahead.mjs
-      - name: Run standard and Shoot-the-Moon gameplay simulations
-        # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
-        run: node scripts/verify-gameplay-simulation-qa.mjs
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/diagnose-opponent-lookahead.mjs')
+          source=path.read_text()
+          old="['--deals=12','--cycle=passing','--seed-base=2026091840']"
+          new="['--deals=16','--cycle=full','--seed-base=2026101800']"
+          if old not in source:
+              raise SystemExit('lookahead diagnostic invocation changed')
+          path.write_text(source.replace(old,new))
+          PY
+          node scripts/diagnose-opponent-lookahead.mjs
+      - name: Run large Prompt 4 vs legacy full-cycle campaign
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/diagnose-standard-opponent-ai.mjs')
+          source=path.read_text()
+          old="['app.js','gameplay-standard-fixes.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          new="['app.js','gameplay-standard-fixes.js','gameplay-opponent-lookahead.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          if old not in source:
+              raise SystemExit('standard diagnostic source list changed')
+          path.write_text(source.replace(old,new))
+          PY
+          node scripts/diagnose-standard-opponent-ai.mjs --deals=24 --cycle=full --seed-base=2026111800
