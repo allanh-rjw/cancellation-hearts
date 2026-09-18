@@ -20,7 +20,7 @@ const state = {
   players: [], dealer: 0, round: 1, target: 100, difficulty: 'medium',
   currentPlayer: 0, leader: 0, trick: [], trickNumber: 0, heartsBroken: false,
   phase: 'idle', selected: new Set(), passOffset: 1, gameOver: false, coachStrategy: null,
-  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
+  coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, opponentPlans:{}, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
 };
 
 
@@ -138,7 +138,7 @@ function startGame(){
 
 function beginRound(){
   state.practiceEnded=false;
-  state.phase = 'dealing'; state.currentHandPathway=null; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.originalStrategy=null; state.strategyPivots=[]; state.pendingPivot=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null; state.openingAutoPlayers=new Set(); state.openingLeadSuit=null;
+  state.phase = 'dealing'; state.currentHandPathway=null; state.trick = []; state.currentTrickAward=null; state.trickNumber = 0; state.carryoverPoints=0; state.carryoverCards=[]; state.heartsBroken = false; state.selected.clear(); state.coachStrategy=null; state.originalStrategy=null; state.strategyPivots=[]; state.pendingPivot=null; state.actionLog=[]; state.humanDecisionLog=[]; state.lastPostAnalysis=null; state.openingAutoPlayers=new Set(); state.openingLeadSuit=null; state.opponentPlans={};
   state.players.forEach(p=>{p.hand=[]; p.roundPoints=0; p.tricks=[];});
   if(state.mode==='practice') dealPracticeRound();
   else {
@@ -232,6 +232,10 @@ function confirmHumanPass(){
 function choosePassCards(player){
   const suitCounts=Object.fromEntries(SUITS.map(s=>[s,player.hand.filter(c=>c.suit===s).length]));
   const prof=difficultyProfile();
+  const playerIndex=state.players.indexOf(player);
+  const metrics=humanHandMetrics(playerIndex);
+  const strategy=recommendedStrategy(metrics,playerIndex);
+  if(playerIndex>0&&state.mode==='standard') state.opponentPlans[playerIndex]={strategy,originalStrategy:strategy,voidCandidate:metrics.voidCandidate,partner:null,pivots:[],phase:'establish'};
   const candidates=[...player.hand];
   if(prof.lookahead<2) return candidates.sort((a,b)=>passScore(b,player.persona,suitCounts,player)-passScore(a,player.persona,suitCounts,player)).slice(0,3);
   // Hard/Expert evaluate complete three-card packages so the pass creates a coherent hand.
@@ -245,12 +249,24 @@ function choosePassCards(player){
     const exposedSpades=remain.filter(c=>c.suit==='S'&&['Q','K','A'].includes(c.rank)).length;
     const lowSpades=remain.filter(c=>c.suit==='S'&&RANK_VALUE[c.rank]<=10).length;
     let score=set.reduce((sum,c)=>sum+passScore(c,player.persona,suitCounts,player),0)+voids*15+Math.min(exits,3)*3;
+    score+=opponentPassStrategyScore(set,remain,strategy,metrics.voidCandidate);
     if(exposedSpades&&lowSpades<2) score+=18*exposedSpades;
     if(counts.S===0) score-=8; // incoming pass can rebuild spades dangerously
     if(player.persona==='The Moonshot') score-=remain.filter(c=>RANK_VALUE[c.rank]>=11).length*2;
     if(!best||score>best.score) best={set,score};
   }
   return best?.set||candidates.slice(0,3);
+}
+function opponentPassStrategyScore(set,remain,strategy,voidCandidate){
+  const penalties=set.reduce((n,c)=>n+cardPoints(c),0);
+  const highKept=remain.filter(c=>RANK_VALUE[c.rank]>=11).length;
+  const targetVoid=remain.some(c=>c.suit===voidCandidate)?0:12;
+  if(strategy==='avoidance') return penalties*5+targetVoid+set.filter(c=>RANK_VALUE[c.rank]>=11).length*5;
+  if(strategy==='targeting') return targetVoid-penalties*3+Math.min(highKept,4)*2;
+  if(strategy==='cancellation') return set.filter(c=>remain.some(x=>x.suit===c.suit&&x.rank===c.rank)).length*8+targetVoid;
+  if(strategy==='soloMoon') return -penalties*6-set.filter(c=>RANK_VALUE[c.rank]>=11).length*7;
+  if(strategy==='twoMoon') return -penalties*3-set.filter(c=>RANK_VALUE[c.rank]>=12).length*4+targetVoid;
+  return 0;
 }
 function passScore(c,p,suitCounts,player){
   let s=RANK_VALUE[c.rank];
@@ -510,13 +526,88 @@ function scoreAwareAdjustment(i,c){
 function min(a,b){return Math.min(a,b);}
 function chooseAiCard(i){
   const legal=legalCards(i), p=state.players[i], prof=difficultyProfile();
-  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
+  const plan=opponentStrategyPlan(i);
+  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+standardTacticalAdjustment(i,c)+opponentStrategyAdjustment(i,c,plan)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
   const threat=practiceThreatState();
   if(state.difficulty==='easy' && !threat.credible) return legal[Math.floor(Math.random()*legal.length)];
   if(prof.blunder&&Math.random()<prof.blunder) return ranked[Math.min(1,ranked.length-1)].c;
   // Only randomize among genuinely close plays; Expert is almost deterministic.
   if(ranked.length>1 && ranked[0].s-ranked[1].s<prof.noise && Math.random()<.22) return ranked[1].c;
   return ranked[0].c;
+}
+function opponentStrategyPlan(i){
+  if(state.mode!=='standard'||difficultyProfile().lookahead<1) return null;
+  const metrics=humanHandMetrics(i);
+  let plan=state.opponentPlans[i];
+  if(!plan){
+    const strategy=recommendedStrategy(metrics,i);
+    plan=state.opponentPlans[i]={strategy,originalStrategy:strategy,voidCandidate:metrics.voidCandidate,partner:null,pivots:[]};
+  }
+  const collectors=currentPenaltyCollectors();
+  let next=plan.strategy;
+  if(plan.strategy==='soloMoon'){
+    const outsiders=collectors.filter(x=>x.i!==i);
+    if(outsiders.length===1) { next='twoMoon'; plan.partner=outsiders[0].i; }
+    if(outsiders.length>1) next='avoidance';
+  } else if(plan.strategy==='twoMoon'){
+    if(plan.partner==null) plan.partner=collectors.find(x=>x.i!==i)?.i??null;
+    if(collectors.some(x=>x.i!==i&&x.i!==plan.partner)) next='avoidance';
+  }
+  if(next!==plan.strategy){
+    plan.pivots.push({from:plan.strategy,to:next,trick:state.trickNumber+1});
+    plan.strategy=next;
+  }
+  plan.phase=state.trickNumber<4?'establish':state.trickNumber<9?'execute':'exit';
+  return plan;
+}
+function opponentStrategyAdjustment(i,c,plan){
+  if(!plan) return 0;
+  const prof=difficultyProfile(), rank=RANK_VALUE[c.rank], projected=currentWinningPlayerIfPlayed(c,i);
+  const points=state.carryoverPoints+state.trick.reduce((n,x)=>n+cardPoints(x.card),0)+cardPoints(c);
+  const handAfter=state.players[i].hand.filter(x=>x.id!==c.id);
+  const createsVoid=!handAfter.some(x=>x.suit===c.suit);
+  const safeLoss=projected!==i;
+  const target=state.players.reduce((best,p,idx)=>idx===i||p.score+p.roundPoints>=state.players[best].score+state.players[best].roundPoints?best:idx,i===0?1:0);
+  let s=0;
+  if(plan.strategy==='avoidance'){
+    if(points) s+=safeLoss?18:-28-points*2;
+    if(safeLoss&&rank>=8) s+=rank;
+    if(createsVoid&&c.suit===plan.voidCandidate) s+=14;
+    if(plan.phase!=='exit'&&rank<=5&&safeLoss) s-=7;
+  } else if(plan.strategy==='targeting'){
+    if(points&&projected===target) s+=32+points*2;
+    if(points&&projected===i) s-=30;
+    if(createsVoid) s+=8;
+  } else if(plan.strategy==='cancellation'){
+    const cancels=state.trick.some(x=>x.card.suit===c.suit&&x.card.rank===c.rank);
+    if(cancels) s+=projected===i&&points?-20:22;
+    if(safeLoss&&rank>=9) s+=8;
+  } else if(plan.strategy==='soloMoon'){
+    s+=projected===i?24:-18;
+    if(points) s+=projected===i?points*3:-points*5;
+  } else if(plan.strategy==='twoMoon'){
+    const pairWins=projected===i||projected===plan.partner;
+    s+=pairWins?18:-16;
+    if(points) s+=pairWins?points*2:-points*4;
+  }
+  if(plan.phase==='establish'&&createsVoid) s+=6;
+  if(plan.phase==='exit'&&safeLoss&&rank>=8) s+=8;
+  return s*Math.min(1.5,prof.lookahead/3);
+}
+function standardTacticalAdjustment(i,c){
+  if(state.mode!=='standard'||state.trick.length!==state.players.length-1) return 0;
+  const fake=[...state.trick.map(x=>({...x})),{player:i,card:c,cancelled:false}];
+  resolveFakeCancellation(fake);
+  const led=currentLedSuit()||c.suit;
+  const eligible=fake.filter(x=>x.card.suit===led&&!x.cancelled);
+  if(!eligible.length) return state.carryoverPoints? -state.carryoverPoints*2:0;
+  const winner=eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player;
+  const points=state.carryoverPoints+fake.reduce((sum,x)=>sum+cardPoints(x.card),0);
+  if(!points) return winner===i?-2:2;
+  if(winner===i) return -(32+points*4);
+  const low=Math.min(...state.players.map(p=>p.score+p.roundPoints));
+  const winnerTotal=state.players[winner].score+state.players[winner].roundPoints;
+  return 18+points*2+(winnerTotal===low?12:0);
 }
 function advancedInferenceAdjustment(i,c){
   const prof=difficultyProfile(); if(prof.lookahead<2) return 0;
@@ -605,6 +696,12 @@ function practiceDefenseAdjustment(i,c){
   s += (state.learningProfile?.defenseBoost||0)*4;
   return s;
 }
+function standardMoonThreat(collectors,concentrated,repeatedControl){
+  if(!collectors.length||collectors.length>2) return false;
+  return concentrated>=difficultyProfile().moonThreshold||
+    (repeatedControl>=2&&concentrated>=2)||
+    (state.trickNumber>=6&&concentrated>=4);
+}
 function evaluateCard(i,c,persona){
   const trickPts=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
   const wins=wouldCurrentlyWin(c), player=state.players[i];
@@ -621,7 +718,7 @@ function evaluateCard(i,c,persona){
   const credibleMoon=moonReadiness>=moonThreshold && collectors.length<=1;
   const concentrated=collectors.reduce((a,b)=>a+b.pts,0);
   const repeatedControl=Math.max(0,...state.players.map((p,idx)=>p.tricks?.length||0));
-  const moonThreat=collectors.length<=2 && (concentrated>=difficultyProfile().moonThreshold || repeatedControl>=2 || state.trickNumber>=2);
+  const moonThreat=standardMoonThreat(collectors,concentrated,repeatedControl);
 
   // Common rational baseline: avoid winning loaded tricks, dump liability when safely void, and value low cards.
   let s=(wins?-(8+trickPts*3):10)+cardPoints(c)*6+(RANK_VALUE[c.rank]<=6?3:0);
@@ -673,14 +770,14 @@ function evaluateCard(i,c,persona){
 }
 function wouldCurrentlyWin(card){
   if(state.trick.length===0) return true;
-  const fake=[...state.trick,{player:-1,card,cancelled:false}]; resolveFakeCancellation(fake);
+  const fake=[...state.trick.map(x=>({...x})),{player:-1,card,cancelled:false}]; resolveFakeCancellation(fake);
   const led=currentLedSuit()||card.suit;
   const eligible=fake.filter(x=>x.card.suit===led&&!x.cancelled);
   return eligible.length>0&&eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player===-1;
 }
 function currentWinningPlayerIfPlayed(card,i){
   if(state.trick.length===0) return i;
-  const fake=[...state.trick,{player:i,card,cancelled:false}]; resolveFakeCancellation(fake);
+  const fake=[...state.trick.map(x=>({...x})),{player:i,card,cancelled:false}]; resolveFakeCancellation(fake);
   const led=currentLedSuit()||card.suit;
   const eligible=fake.filter(x=>x.card.suit===led&&!x.cancelled);
   return eligible.length?eligible.reduce((a,b)=>RANK_VALUE[a.card.rank]>RANK_VALUE[b.card.rank]?a:b).player:fake[0].player;
@@ -767,8 +864,8 @@ function setStatus(t){ $('status').textContent=t; }
 
 const STRATEGY_LABELS={avoidance:'Avoidance',targeting:'Targeting',cancellation:'Cancellation-oriented',soloMoon:'Solo moon',twoMoon:'Two-player moon'};
 function suitName(s){return {C:'clubs',D:'diamonds',S:'spades',H:'hearts'}[s];}
-function humanHandMetrics(){
-  const hand=state.players[0]?.hand||[];
+function humanHandMetrics(playerIndex=0){
+  const hand=state.players[playerIndex]?.hand||[];
   const counts=Object.fromEntries(SUITS.map(s=>[s,hand.filter(c=>c.suit===s).length]));
   const highs=hand.filter(c=>RANK_VALUE[c.rank]>=11);
   const queens=hand.filter(c=>c.suit==='S'&&c.rank==='Q');
@@ -807,13 +904,13 @@ function bestVoidCandidate(m){
   }
   return ordered[0];
 }
-function recommendedStrategy(m){
+function recommendedStrategy(m,playerIndex=0){
   const strongHearts=m.hearts.length>=5&&m.hearts.filter(c=>RANK_VALUE[c.rank]>=10).length>=3;
   const broadControl=SUITS.filter(s=>m.hand.some(c=>c.suit===s&&RANK_VALUE[c.rank]>=13)).length;
   if(m.control>=8&&strongHearts&&broadControl>=3) return 'soloMoon';
   if(m.control>=6&&m.hearts.length>=4) return 'twoMoon';
   if(m.pairs.length>=3) return 'cancellation';
-  const scoreLead=state.players.length&&state.players[0].score===Math.min(...state.players.map(p=>p.score));
+  const scoreLead=state.players.length&&state.players[playerIndex].score===Math.min(...state.players.map(p=>p.score));
   if(!scoreLead&&m.control>=4) return 'targeting';
   return 'avoidance';
 }
