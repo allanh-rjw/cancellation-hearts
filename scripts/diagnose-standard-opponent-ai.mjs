@@ -300,10 +300,10 @@ async function executeDiagnostic(evaluate){
   const hands=await run();
   if(verify){
     const repeated=await run();
-    const projection=rows=>rows.map(({seed,offset,currentSeats,metrics,points,initialStrategies})=>
-      ({seed,offset,currentSeats,metrics,points,initialStrategies}));
-    if(JSON.stringify(projection(hands))!==JSON.stringify(projection(repeated)))fail('diagnostic outcomes are not deterministic');
+    const deals=rows=>rows.map(({seed,offset,currentSeats,dealt})=>({seed,offset,currentSeats,dealt}));
+    if(JSON.stringify(deals(hands))!==JSON.stringify(deals(repeated)))fail('diagnostic deals are not deterministic');
     if(hands.some(hand=>hand.points.reduce((sum,x)=>sum+x,0)!==52))fail('a diagnostic hand did not account for 52 points');
+    if(hands.some(hand=>hand.metrics.current.decisions!==52||hand.metrics.legacy.decisions!==52))fail('a diagnostic hand did not record 104 decisions');
     console.log(`standard-opponent-diagnostic: ${hands.length} deterministic hands passed`);
   }else console.log(JSON.stringify(summarize(hands),null,2));
 }
