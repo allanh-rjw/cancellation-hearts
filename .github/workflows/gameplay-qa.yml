@@ -5,6 +5,7 @@ on:
     paths:
       - app.js
       - gameplay-standard-fixes.js
+      - gameplay-opponent-lookahead.js
       - gameplay-moon-fixes.js
       - gameplay-moon-calibration.js
       - index.html
@@ -12,9 +13,11 @@ on:
       - scripts/verify-final-trick-cancellation.mjs
       - scripts/verify-standard-opponent-ai.mjs
       - scripts/diagnose-standard-opponent-ai.mjs
+      - scripts/diagnose-opponent-lookahead.mjs
       - scripts/opponent-belief-state.mjs
       - scripts/verify-opponent-belief-state.mjs
       - scripts/verify-belief-aware-opponent.mjs
+      - scripts/verify-opponent-lookahead.mjs
       - scripts/verify-gameplay-simulation.mjs
       - scripts/verify-gameplay-simulation-qa.mjs
       - .github/workflows/gameplay-qa.yml
@@ -31,14 +34,17 @@ jobs:
       - name: Syntax check gameplay QA
         run: |
           node --input-type=module --check < gameplay-standard-fixes.js
+          node --input-type=module --check < gameplay-opponent-lookahead.js
           node --input-type=module --check < gameplay-moon-fixes.js
           node --input-type=module --check < gameplay-moon-calibration.js
           node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
+          node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
           node --input-type=module --check < scripts/opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-belief-aware-opponent.mjs
+          node --input-type=module --check < scripts/verify-opponent-lookahead.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
       - name: Verify final-trick full-cancellation rule
@@ -51,6 +57,10 @@ jobs:
         run: node scripts/verify-opponent-belief-state.mjs
       - name: Verify belief-aware opponent policy
         run: node scripts/verify-belief-aware-opponent.mjs
+      - name: Verify multi-trick opponent lookahead
+        run: node scripts/verify-opponent-lookahead.mjs
+      - name: Compare Prompt 3 and Prompt 4 on paired deals
+        run: node scripts/diagnose-opponent-lookahead.mjs
       - name: Run standard and Shoot-the-Moon gameplay simulations
         # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
         run: node scripts/verify-gameplay-simulation-qa.mjs
