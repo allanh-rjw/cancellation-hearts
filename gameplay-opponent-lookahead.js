@@ -67,6 +67,34 @@ function opponentLookaheadInventoryScore(i,card,remaining,plan,winner){
   score-=remaining.filter(x=>x.suit==='S'&&['A','K'].includes(x.rank)).length*.35;
   return score;
 }
+
+function opponentLookaheadPassDisciplineWeight(){
+  if(state.passOffset===4)return 1.5;
+  if(state.passOffset===-3)return 1.3;
+  if(state.passOffset===0)return 1.35;
+  return .65;
+}
+function opponentLookaheadDisciplineAdjustment(i,card,plan,winner){
+  if(window.__opponentLookahead?.prompt5Enabled===false)return 0;
+  const legal=legalCards(i);
+  if(legal.length<2||['soloMoon','twoMoon'].includes(plan?.strategy))return 0;
+  const weight=opponentLookaheadPassDisciplineWeight();
+  const loaded=state.carryoverPoints+state.trick.reduce((sum,play)=>sum+cardPoints(play.card),0)+cardPoints(card)>0;
+  let score=0;
+  if(!loaded&&winner===i&&legal.some(candidate=>candidate.id!==card.id&&beliefAwareProjectedWinner(i,candidate)!==i)){
+    const strategyWeight=plan?.strategy==='avoidance'?1:plan?.strategy==='targeting'?.7:.5;
+    score-=2*weight*strategyWeight;
+  }
+  if(winner!==i&&cardPoints(card)===0){
+    const safe=legal.filter(candidate=>beliefAwareProjectedWinner(i,candidate)!==i);
+    const highestSafe=safe.reduce((best,candidate)=>RANK_VALUE[candidate.rank]>RANK_VALUE[best.rank]?candidate:best,safe[0]);
+    if(highestSafe&&highestSafe.id===card.id&&safe.some(candidate=>RANK_VALUE[candidate.rank]<=6&&RANK_VALUE[candidate.rank]<RANK_VALUE[card.rank])){
+      score+=1.25*weight*(plan?.phase==='exit'?1.2:1);
+    }
+  }
+  return opponentLookaheadClamp(score,-3.5,2.5);
+}
+
 function opponentLookaheadDecision(i,card,belief,plan){
   const scale=opponentLookaheadScale(),depth=opponentLookaheadDepth();
   if(!scale||!depth||state.mode!=='standard')return {score:0,nextLead:null,retainControl:0};
@@ -89,12 +117,14 @@ function opponentLookaheadDecision(i,card,belief,plan){
   }else{
     score+=Math.min(1.2,opponentLookaheadExitCount(remaining)*.2);
   }
-  return {score:opponentLookaheadClamp(score*scale,-7,7),nextLead,retainControl};
+  const discipline=opponentLookaheadDisciplineAdjustment(i,card,plan,winner)*scale;
+  return {score:opponentLookaheadClamp(score*scale+discipline,-7,7),nextLead,retainControl,discipline};
 }
 
 const opponentLookaheadControl=window.__opponentLookahead??{};
 Object.assign(opponentLookaheadControl,{
   enabled:opponentLookaheadControl.enabled!==false,
+  prompt5Enabled:opponentLookaheadControl.prompt5Enabled!==false,
   depth:opponentLookaheadDepth,
   lastDecision:null,
   scoreCard:(seat,card)=>opponentLookaheadDecision(seat,card,beliefAwareObservedState(seat),opponentStrategyPlan(seat))
@@ -108,13 +138,13 @@ chooseAiCard=function(i){
     const base=evaluateCard(i,card,player.persona)+practiceDefenseAdjustment(i,card)+standardTacticalAdjustment(i,card)+opponentStrategyAdjustment(i,card,plan)+opponentPathwayAdjustment(i,card,plan)+futureHandScore(i,card)+scoreAwareAdjustment(i,card)+advancedInferenceAdjustment(i,card);
     const beliefScore=beliefAwareDecisionAdjustment(i,card,belief);
     const lookahead=opponentLookaheadDecision(i,card,belief,plan);
-    return {c:card,s:base+beliefScore+lookahead.score,base,belief:beliefScore,lookahead:lookahead.score,nextLead:lookahead.nextLead,retainControl:lookahead.retainControl};
+    return {c:card,s:base+beliefScore+lookahead.score,base,belief:beliefScore,lookahead:lookahead.score,discipline:lookahead.discipline??0,nextLead:lookahead.nextLead,retainControl:lookahead.retainControl};
   }).sort((a,b)=>b.s-a.s);
   let chosen,reason='lookahead-top-ranked';
   if(profile.blunder&&Math.random()<profile.blunder){chosen=ranked[Math.min(1,ranked.length-1)].c;reason='lookahead-difficulty-blunder';}
   else if(ranked.length>1&&ranked[0].s-ranked[1].s<profile.noise&&Math.random()<.22){chosen=ranked[1].c;reason='lookahead-close-score-noise';}
   else chosen=ranked[0].c;
-  const decision={seat:i,reason,chosen:chosen.id,depth:opponentLookaheadDepth(),ranked:ranked.map(x=>({id:x.c.id,base:x.base,belief:x.belief,lookahead:x.lookahead,total:x.s,nextLead:x.nextLead,retainControl:x.retainControl}))};
+  const decision={seat:i,reason,chosen:chosen.id,depth:opponentLookaheadDepth(),ranked:ranked.map(x=>({id:x.c.id,base:x.base,belief:x.belief,lookahead:x.lookahead,discipline:x.discipline,total:x.s,nextLead:x.nextLead,retainControl:x.retainControl}))};
   opponentLookaheadControl.lastDecision=decision;
   beliefAwareControl.lastDecision=decision;
   traceOpponentDecision(i,legal,ranked,chosen,reason,plan);
