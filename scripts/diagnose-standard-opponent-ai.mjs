@@ -103,6 +103,8 @@ const diagnosticRuntime=String.raw`
     Object.assign(state,{dealer:seed%8,currentPlayer:0,leader:0,trick:[],trickNumber:0,heartsBroken:false,phase:'passing',
       gameOver:false,carryoverPoints:0,carryoverCards:[],openingAutoPlayers:new Set(),openingLeadSuit:null,opponentPlans:{},
       opponentDiagnostics:null,actionLog:[],opponentHistory:{},selected:new Set(),
+      humanDecisionLog:[],roundStartMetrics:null,lastPostAnalysis:null,scoreHistory:[],currentTrickAward:null,
+      originalStrategy:null,strategyPivots:[],pendingPivot:null,handAnalysisHistory:[],currentHandPathway:null,
       learningProfile:{version:1,games:0,hands:0,persona:{},defenseBoost:0,targetingBoost:0,passingBoost:0}});
     const deck=shuffle(makeDeck());
     for(let i=0;i<deck.length;i++)state.players[i%8].hand.push(deck[i]);
@@ -247,7 +249,8 @@ const diagnosticRuntime=String.raw`
     postHand(initialHands,currentSeats,metrics,traces);
     const initialStrategies=Object.fromEntries(Object.entries(state.opponentPlans).map(([i,p])=>[i,p.originalStrategy]));
     const decisionTraces=clone(state.opponentDiagnostics?.rows||[]),plays=state.actionLog.map(x=>x.card.id);
-    return {seed,offset,currentSeats:currentSeatList,metrics,traces,decisionTraces,plays,
+    const passes=state.__diagnosticPass.passes.map(cards=>cards.map(card=>card.id));
+    return {seed,offset,currentSeats:currentSeatList,metrics,traces,decisionTraces,plays,passes,
       points:state.players.map(p=>p.roundPoints),initialStrategies,strategyEvidence,dealt};
   }
   window.__opponentDiagnostic={runHand};
@@ -292,7 +295,7 @@ function summarizeDecisionTraces(hands){
     byStrategy:grouped(x=>x.strategy??'none'),byPassDirection:grouped(x=>x.offset),bySeat:grouped(x=>x.seat)};
 }
 function deterministicTraceProjection(hands){
-  return hands.map(hand=>({seed:hand.seed,offset:hand.offset,currentSeats:hand.currentSeats,
+  return hands.map(hand=>({seed:hand.seed,offset:hand.offset,currentSeats:hand.currentSeats,passes:hand.passes,
     decisions:hand.decisionTraces.map(x=>({seat:x.seat,trick:x.trick,position:x.position,
       selected:x.selected.cardId,shadow:x.shadow.cardId,agreement:x.agreement}))}));
 }
