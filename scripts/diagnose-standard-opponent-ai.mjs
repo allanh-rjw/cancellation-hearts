@@ -102,7 +102,8 @@ const diagnosticRuntime=String.raw`
     state.players=Array.from({length:8},(_,i)=>({name:'P'+i,persona:PERSONAS[i%PERSONAS.length],score:i*3,roundPoints:0,hand:[],tricks:[]}));
     Object.assign(state,{dealer:seed%8,currentPlayer:0,leader:0,trick:[],trickNumber:0,heartsBroken:false,phase:'passing',
       gameOver:false,carryoverPoints:0,carryoverCards:[],openingAutoPlayers:new Set(),openingLeadSuit:null,opponentPlans:{},
-      opponentDiagnostics:null,actionLog:[],opponentHistory:{},selected:new Set()});
+      opponentDiagnostics:null,actionLog:[],opponentHistory:{},selected:new Set(),
+      learningProfile:{version:1,games:0,hands:0,persona:{},defenseBoost:0,targetingBoost:0,passingBoost:0}});
     const deck=shuffle(makeDeck());
     for(let i=0;i<deck.length;i++)state.players[i%8].hand.push(deck[i]);
     state.players.forEach(player=>sortHand(player.hand));
