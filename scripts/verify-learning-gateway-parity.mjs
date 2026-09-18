@@ -16,7 +16,7 @@ const productionHarness=readFileSync(new URL("./verify-production-domain-pack-in
 for(const signature of [
   "function legalCards(playerIndex)",
   "function renderCoach()",
-  "function recommendedStrategy(m)",
+  "function recommendedStrategy(m,playerIndex=0)",
   "function renderPassingRecommendations()",
   "function rankHumanLegalCards",
   "function strategyViability(strategy)",
