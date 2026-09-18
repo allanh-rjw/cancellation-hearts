@@ -44,6 +44,8 @@ vm.runInContext([
   declaration('opponentPathwayAdjustment'),
   declaration('standardTacticalAdjustment'),
   declaration('standardMoonThreat'),
+  declaration('opponentDecisionOutcome'),
+  declaration('traceOpponentDecision'),
   declaration('chooseAiCard')
 ].join('\n'),context);
 
@@ -154,4 +156,16 @@ context.legal=[card('D','5','complete-void')];context.state.players[1].hand=[con
 plan={strategy:'avoidance',phase:'establish',voidCandidate:'D',pathway:{entryId:null,exitId:null}};
 assert.ok(context.opponentPathwayAdjustment(1,context.legal[0],plan)>0,'pathway did not reward safe completion of the intended void');
 
-console.log('standard-opponent-ai: 29 deterministic cases passed');
+context.state.opponentPlans={1:plan};context.state.opponentDiagnostics={enabled:true,shadowPolicy:'greedy',rows:[]};
+const gameplayBefore=JSON.stringify({trick:context.state.trick,players:context.state.players,carryoverPoints:context.state.carryoverPoints});
+const tracedChoice=context.chooseAiCard(1);
+assert.equal(JSON.stringify({trick:context.state.trick,players:context.state.players,carryoverPoints:context.state.carryoverPoints}),gameplayBefore,
+  'shadow evaluation mutated gameplay state');
+assert.equal(context.state.opponentDiagnostics.rows.length,1,'enabled diagnostics did not record one decision');
+const trace=context.state.opponentDiagnostics.rows[0];
+assert.equal(trace.selected.cardId,tracedChoice.id,'trace did not record the production selection');
+assert.equal(trace.shadow.cardId,trace.legalActions[0].cardId,'greedy shadow did not select the highest-ranked candidate');
+assert.ok(Object.hasOwn(trace.selected,'strategyProgress'),'trace omitted strategy progress');
+assert.ok(Object.hasOwn(trace.tieBreak,'scoreGap'),'trace omitted deterministic tie-breaking evidence');
+
+console.log('standard-opponent-ai: 35 deterministic cases passed');
