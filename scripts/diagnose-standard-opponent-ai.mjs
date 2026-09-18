@@ -291,6 +291,11 @@ function summarizeDecisionTraces(hands){
   return {overall:summarize(traces),byTrick:grouped(x=>x.trick),byPersona:grouped(x=>x.persona),
     byStrategy:grouped(x=>x.strategy??'none'),byPassDirection:grouped(x=>x.offset),bySeat:grouped(x=>x.seat)};
 }
+function deterministicTraceProjection(hands){
+  return hands.map(hand=>({seed:hand.seed,offset:hand.offset,currentSeats:hand.currentSeats,
+    decisions:hand.decisionTraces.map(x=>({seat:x.seat,trick:x.trick,position:x.position,
+      selected:x.selected.cardId,shadow:x.shadow.cardId,agreement:x.agreement}))}));
+}
 function summarize(hands){
   const aggregate={current:{},legacy:{}},handAdvantages=[],traces=[];
   for(const hand of hands){
@@ -339,6 +344,8 @@ async function executeDiagnostic(evaluate){
     if(hands.some(hand=>hand.points.reduce((sum,x)=>sum+x,0)!==52))fail('a diagnostic hand did not account for 52 points');
     if(hands.some(hand=>hand.metrics.current.decisions!==52||hand.metrics.legacy.decisions!==52))fail('a diagnostic hand did not record 104 decisions');
     if(hands.some(hand=>hand.decisionTraces.length!==52))fail('a diagnostic hand did not trace every current-policy decision');
+    const traceDifference=firstDifference(deterministicTraceProjection(hands),deterministicTraceProjection(repeated),'traces');
+    if(traceDifference)fail(`shadow decision traces are not deterministic: ${JSON.stringify(traceDifference)}`);
     const summaryDifference=firstDifference(summarizeDecisionTraces(hands),summarizeDecisionTraces(repeated));
     if(summaryDifference)fail(`shadow diagnostic summary is not deterministic: ${JSON.stringify(summaryDifference)}`);
     const sample=hands[0],withoutTrace=await evaluate(`window.__opponentDiagnostic.runHand(${sample.seed},${sample.offset},${JSON.stringify(sample.currentSeats)},false)`);
