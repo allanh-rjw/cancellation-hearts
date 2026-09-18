@@ -19,6 +19,10 @@ function run(){
   recordPlay(belief,{seat:2,card:incoming[0],ledSuit:'S'});
   const snapshot=beliefSnapshot(belief);
   const queen=snapshot.dangerousLocations.SQ;
+  assert.equal(snapshot.passEvidence.outgoing.length,3);
+  assert.equal(snapshot.passEvidence.incoming.length,3);
+  assert.equal(snapshot.passEvidence.outgoing[0].seat,4);
+  assert.equal(snapshot.passEvidence.incoming[0].seat,0);
   assert.deepEqual(snapshot.knownVoids[6],['S']);
   assert.deepEqual(snapshot.knownVoids[5],['C']);
   assert.deepEqual(queen.played,[4]);
