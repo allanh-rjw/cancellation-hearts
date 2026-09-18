@@ -13,6 +13,7 @@ on:
       - scripts/verify-final-trick-cancellation.mjs
       - scripts/verify-standard-opponent-ai.mjs
       - scripts/diagnose-standard-opponent-ai.mjs
+      - scripts/diagnose-opponent-lookahead.mjs
       - scripts/opponent-belief-state.mjs
       - scripts/verify-opponent-belief-state.mjs
       - scripts/verify-belief-aware-opponent.mjs
@@ -39,6 +40,7 @@ jobs:
           node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
+          node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
           node --input-type=module --check < scripts/opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-belief-aware-opponent.mjs
@@ -57,6 +59,8 @@ jobs:
         run: node scripts/verify-belief-aware-opponent.mjs
       - name: Verify multi-trick opponent lookahead
         run: node scripts/verify-opponent-lookahead.mjs
+      - name: Compare Prompt 3 and Prompt 4 on paired deals
+        run: node scripts/diagnose-opponent-lookahead.mjs
       - name: Run standard and Shoot-the-Moon gameplay simulations
         # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
         run: node scripts/verify-gameplay-simulation-qa.mjs
