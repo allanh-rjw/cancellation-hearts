@@ -113,10 +113,13 @@ const diagnosticRuntime=String.raw`
     state.__diagnosticPass={passes:[],provisional:{}};
     if(offset){
       for(const i of currentSeats)state.__diagnosticPass.provisional[i]=strategyAssessment(humanHandMetrics(i),i).strategy;
+      const savedProfile=difficultyProfile;
+      difficultyProfile=()=>({...savedProfile(),noise:0});
       const passes=state.players.map((player,i)=>{
         Math.random=seeded(seed^(0x51f15e+i*0x9e37));
         return policyFor(i,currentSeats)==='current'?choosePassCards(player):legacyPass(player);
       });
+      difficultyProfile=savedProfile;
       state.__diagnosticPass.passes=passes.map(cards=>clone(cards));
       for(let i=0;i<8;i++)for(const card of passes[i])state.players[i].hand.splice(state.players[i].hand.findIndex(x=>x.id===card.id),1);
       for(let i=0;i<8;i++)state.players[(i+offset+8)%8].hand.push(...passes[i]);
