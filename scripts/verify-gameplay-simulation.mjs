@@ -139,7 +139,7 @@ async function runScenario(port,baseUrl,scenario){
             if(area>0){const seat=card.closest('.seat');actionCollisions.push({button:id,seat:[...seat.classList].find(x=>/^seat-\\d+$/.test(x))??'unknown',area:Math.round(area),buttonRect:{x:Math.round(br.x),y:Math.round(br.y),w:Math.round(br.width),h:Math.round(br.height)},cardRect:{x:Math.round(cr.x),y:Math.round(cr.y),w:Math.round(cr.width),h:Math.round(cr.height)}});}
           }
         }
-        const opening=state.trickNumber===0?{dealer:state.dealer,currentPlayer:state.currentPlayer,leader:state.leader,openingLeadSuit:state.openingLeadSuit,openingAutoPlayers:[...(state.openingAutoPlayers??[])],trick:(state.trick??[]).map(x=>({player:x.player,rank:x.card?.rank,suit:x.card?.suit,cancelled:!!x.cancelled}))}:null;
+        const opening=state.trickNumber===0&&state.phase==='playing'?{dealer:state.dealer,currentPlayer:state.currentPlayer,leader:state.leader,openingLeadSuit:state.openingLeadSuit,openingAutoPlayers:[...(state.openingAutoPlayers??[])],trick:(state.trick??[]).map(x=>({player:x.player,rank:x.card?.rank,suit:x.card?.suit,cancelled:!!x.cancelled}))}:null;
         let action='wait';
         if(state.phase==='passing'){
           while(state.selected.size<3){const card=document.querySelector('#humanHand .card.playable');if(!card)break;card.click();}
@@ -170,7 +170,13 @@ async function runScenario(port,baseUrl,scenario){
       const snapshot=JSON.parse(raw);
       snapshots.push(snapshot);
       stateChecks(snapshot,label);
-      if(snapshot.opening&&snapshot.opening.openingAutoPlayers.length)openingObservations.push(snapshot.opening);
+      if(snapshot.opening){
+        const plays=snapshot.opening.trick;
+        if(snapshot.opening.openingLeadSuit!=='C')fail(`${label}: opening led suit was not clubs`);
+        if(plays.length&&(plays[0].rank!=='2'||plays[0].suit!=='C'))fail(`${label}: opening trick did not begin with 2♣`);
+        if(new Set(plays.map(x=>x.player)).size!==plays.length)fail(`${label}: a player contributed more than one opening-trick card`);
+        if(plays.length)openingObservations.push(snapshot.opening);
+      }
       for(const c of snapshot.actionCollisions)collisions.push(c);
       const signature=JSON.stringify([snapshot.phase,snapshot.currentPlayer,snapshot.trickNumber,snapshot.trickLength,snapshot.handSizes,snapshot.scoreHistoryLength,snapshot.practiceEnded,snapshot.gameOver,snapshot.status,snapshot.action]);
       if(signature!==lastSignature){lastSignature=signature;lastChange=Date.now();}
@@ -196,6 +202,7 @@ async function runScenario(port,baseUrl,scenario){
 const server=createServer((req,res)=>{
   try{
     const requested=new URL(req.url,'http://localhost').pathname;
+    if(requested==='/v1/domains/cancellation-hearts/access-preflight'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({domainId:'cancellation-hearts',operation:'access-preflight',disposition:'completed',output:{authorized:true}}));return;}
     if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}
     const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));
     const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');
