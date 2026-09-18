@@ -51,7 +51,7 @@ assert.equal(chosen.id,'s2','belief-aware policy failed to avoid exposed high-sp
 assert.equal(context.window.__opponentBeliefAware.lastDecision.chosen,'s2');
 assert.ok(context.window.__opponentBeliefAware.lastDecision.ranked.some(row=>row.belief!==0),'belief score did not affect ranking');
 
-const passed=context.choosePassCards(p1);
+const passed=context.choosePassCards(players[1]);
 p1.hand=p1.hand.filter(c=>!passed.some(x=>x.id===c.id));
 const passedLocation=context.window.__opponentBeliefAware.inspectCard(1,passed[2].suit,passed[2].rank);
 assert.deepEqual([...passedLocation.knownHolders],[2],'own pass evidence did not preserve exact recipient knowledge');
