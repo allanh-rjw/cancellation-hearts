@@ -202,6 +202,7 @@ async function runScenario(port,baseUrl,scenario){
 const server=createServer((req,res)=>{
   try{
     const requested=new URL(req.url,'http://localhost').pathname;
+    if(requested==='/v1/domains/cancellation-hearts/access-preflight'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({domainId:'cancellation-hearts',operation:'access-preflight',disposition:'completed',output:{authorized:true}}));return;}
     if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}
     const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));
     const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');
