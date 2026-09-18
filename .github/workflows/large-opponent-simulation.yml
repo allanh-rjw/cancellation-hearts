@@ -1,0 +1,43 @@
+name: Large Opponent Simulation
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/large-opponent-simulation.yml
+  workflow_dispatch:
+
+jobs:
+  opponent-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run large Prompt 3 vs Prompt 4 paired campaign
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/diagnose-opponent-lookahead.mjs')
+          source=path.read_text()
+          old="['--deals=12','--cycle=passing','--seed-base=2026091840']"
+          new="['--deals=16','--cycle=full','--seed-base=2026101800']"
+          if old not in source:
+              raise SystemExit('lookahead diagnostic invocation changed')
+          path.write_text(source.replace(old,new))
+          PY
+          node scripts/diagnose-opponent-lookahead.mjs
+      - name: Run large Prompt 4 vs legacy full-cycle campaign
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/diagnose-standard-opponent-ai.mjs')
+          source=path.read_text()
+          old="['app.js','gameplay-standard-fixes.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          new="['app.js','gameplay-standard-fixes.js','gameplay-opponent-lookahead.js','gameplay-moon-fixes.js','gameplay-moon-calibration.js']"
+          if old not in source:
+              raise SystemExit('standard diagnostic source list changed')
+          path.write_text(source.replace(old,new))
+          PY
+          node scripts/diagnose-standard-opponent-ai.mjs --deals=24 --cycle=full --seed-base=2026111800
