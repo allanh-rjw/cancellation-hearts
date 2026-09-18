@@ -65,6 +65,7 @@ jobs:
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
             scripts/verify-final-trick-cancellation.mjs
+            scripts/verify-standard-opponent-ai.mjs
             scripts/verify-gameplay-simulation.mjs
             scripts/verify-gameplay-simulation-qa.mjs
             scripts/qa-gameplay-runtime-patch.js
@@ -108,6 +109,8 @@ jobs:
         run: node scripts/verify-tutor-simulation.mjs
       - name: Verify final-trick full-cancellation rule
         run: node scripts/verify-final-trick-cancellation.mjs
+      - name: Verify standard opponent decisions
+        run: node scripts/verify-standard-opponent-ai.mjs
       - name: Run deterministic standard and moon-practice gameplay simulations
         # This is the cross-product regression gate after Tutor validation.
         run: node scripts/verify-gameplay-simulation-qa.mjs
