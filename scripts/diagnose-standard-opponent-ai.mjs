@@ -111,7 +111,10 @@ const diagnosticRuntime=String.raw`
     state.__diagnosticPass={passes:[],provisional:{}};
     if(offset){
       for(const i of currentSeats)state.__diagnosticPass.provisional[i]=strategyAssessment(humanHandMetrics(i),i).strategy;
-      const passes=state.players.map((player,i)=>policyFor(i,currentSeats)==='current'?choosePassCards(player):legacyPass(player));
+      const passes=state.players.map((player,i)=>{
+        Math.random=seeded(seed^(0x51f15e+i*0x9e37));
+        return policyFor(i,currentSeats)==='current'?choosePassCards(player):legacyPass(player);
+      });
       state.__diagnosticPass.passes=passes.map(cards=>clone(cards));
       for(let i=0;i<8;i++)for(const card of passes[i])state.players[i].hand.splice(state.players[i].hand.findIndex(x=>x.id===card.id),1);
       for(let i=0;i<8;i++)state.players[(i+offset+8)%8].hand.push(...passes[i]);
@@ -235,6 +238,7 @@ const diagnosticRuntime=String.raw`
     for(let trick=0;trick<13;trick++){
       while(state.trick.length<8){
         const i=state.currentPlayer,policy=policyFor(i,currentSeats);
+        Math.random=seeded(seed^((trick+1)*0x45d9f3b)^(state.trick.length*0x9e3779b)^(i*0x27d4eb2));
         const card=policy==='current'?chooseAiCard(i):legacyChoose(i);
         observeDecision(i,card,currentSeats,metrics,traces);playCard(i,card);
       }
