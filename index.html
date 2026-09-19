@@ -8,7 +8,16 @@
     <link rel="stylesheet" href="style.css?v=20260910-gateway1" />
   </head>
   <body>
-    <div id="app">
+    <!--
+      Starts inert so no interaction (including Start New Game) is possible
+      until access-gate.js's unlock() removes this attribute, which only
+      happens after Cloudflare/ULS access is verified AND (by then, since
+      access-gate.js is the last gameplay-adjacent script to run) every
+      gameplay script below has already finished installing. This closes the
+      window where a fast click could run pre-canonical opening/play logic.
+      See docs/rule-invariants.md and the app-layer rebuild plan, Phase 1.
+    -->
+    <div id="app" inert>
       <header>
         <div>
           <h1>Cancellation Hearts</h1>
@@ -383,8 +392,20 @@
     <script src="gameplay-opponent-lookahead.js?v=20260918-lookahead1"></script>
     <script src="gameplay-moon-fixes.js?v=20260912-moon1"></script>
     <script src="gameplay-moon-calibration.js?v=20260912-mooncal1"></script>
+    <!--
+      These three used to be injected dynamically by access-gate.js (an
+      unrelated access-verification module) via runtime <script> creation,
+      racing against learning-gateway-runtime.js's own async wrapping of
+      playCard with no handshake between them. They are now plain static
+      tags so the browser loads and executes them synchronously, in this
+      exact order, before any later script or user interaction is possible.
+      See the app-layer rebuild plan, Phase 1.
+    -->
+    <script src="gameplay-rule-invariants.js?v=20260919-static1"></script>
+    <script src="gameplay-opening-enforcement.js?v=20260919-static1"></script>
+    <script src="gameplay-next-trick-flow.js?v=20260919-static1"></script>
     <script src="learning-gateway-runtime.js?v=20260910-gateway1"></script>
-    <script src="access-gate.js?v=20260914-a11rev1"></script>
+    <script src="access-gate.js?v=20260919-static1"></script>
     <script src="causal-loader.js?v=20260910-gateway1"></script>
   </body>
 </html>
