@@ -75,6 +75,22 @@
     });
   }
 
+  function loadNextTrickFlow(){
+    if(window.__cancellationHeartsNextTrickFlow?.installed)return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='gameplay-next-trick-flow.js?v=20260918-nexttrick1';
+      script.onload=()=>window.__cancellationHeartsNextTrickFlow?.installed?resolve():reject(new Error('Next-trick flow did not install.'));
+      script.onerror=()=>reject(new Error('Unable to load gameplay-next-trick-flow.js'));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadGameplayGuards(){
+    await loadRuleInvariants();
+    await loadNextTrickFlow();
+  }
+
   async function verify(){
     if(checking)return checking;
     checking=(async()=>{
@@ -83,7 +99,7 @@
         const api=await import('./learning-gateway-client.mjs');
         const client=api.createLearningGatewayClient({baseUrl:configuredBaseUrl()});
         await client.preflight();
-        await loadRuleInvariants();
+        await loadGameplayGuards();
         unlock();
         return true;
       }catch(error){
@@ -98,7 +114,7 @@
 
   window.CancellationHeartsAccessGate=Object.freeze({verify,status:()=>root.dataset.ulsAccess||'unchecked'});
   lock('checking');
-  await loadRuleInvariants();
+  await loadGameplayGuards();
   await verify();
   intervalId=setInterval(()=>{void verify();},CHECK_INTERVAL_MS);
   window.addEventListener('focus',()=>{void verify();});
