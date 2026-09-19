@@ -56,11 +56,12 @@ context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a')]),pl
 context.startFirstTrick();
 assert(context.state.leader===1,'opening leader is not first 2C holder clockwise from dealer');
 assert(context.state.currentPlayer===1,'opening current player does not match required leader');
+assert(context.state.openingLeaderSeat===1,'opening leader was not frozen for the hand');
 assert(status.includes('must lead exactly one copy'),'opening status does not state forced 2C lead');
 
 // Impossible post-pass state exists only when a player holds nothing but opening penalty cards.
 beginRoundCalls=0;
-context.state={players:[player([c('C','2','lead')]),player([c('S','Q','sq'),c('H','4','h4')]),player([c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
+context.state={players:[player([c('C','2','lead')]),player([c('S','Q','sq'),c('H','4','h4')]),player([c('C','2','other'),c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
 context.startFirstTrick();
 assert(beginRoundCalls===1,'penalty-only opening state was not rejected and redealt');
 assert(context.state.phase==='passing','penalty-only opening state entered play');
@@ -68,13 +69,14 @@ assert(status.includes('Redealing'),'unplayable opening did not explain the rede
 
 // A non-queen spade makes a club-void hand playable on trick 1.
 beginRoundCalls=0;
-context.state={players:[player([c('C','2','lead')]),player([c('S','8','s8'),c('H','4','h4')]),player([c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
+context.state={players:[player([c('C','2','lead')]),player([c('S','8','s8'),c('H','4','h4')]),player([c('C','2','other'),c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
 context.startFirstTrick();
 assert(beginRoundCalls===0,'legal non-queen spade incorrectly triggered a redeal');
 assert(context.state.phase==='playing','legal non-queen spade hand did not enter play');
 
-// 2, 3, 5. Double holder plays exactly one; all other holders are forced; nobody plays twice.
-context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a'),c('C','2','2c-b'),c('C','9','9c')]),player([c('C','2','2c-c'),c('D','5','5d')]),player([c('C','7','7c')])],dealer:0,trick:[],trickNumber:0,phase:'playing',leader:1,currentPlayer:1,openingLeadSuit:'C'};
+// 2, 5. A player holding both physical 2C cards plays exactly one and cannot play twice.
+context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a'),c('C','2','2c-b'),c('C','9','9c')]),player([c('D','5','5d')]),player([c('C','7','7c')])],dealer:0,trick:[],trickNumber:0,phase:'passing',leader:null,currentPlayer:null,openingLeadSuit:null};
+context.startFirstTrick();
 let legal=context.legalCards(1);
 assert(legal.length===2&&legal.every(card=>card.suit==='C'&&card.rank==='2'),'double 2C holder was not restricted to a 2C');
 context.playCard(1,legal[0]);
@@ -83,25 +85,63 @@ const playsAfterOne=context.state.trick.length;
 context.state.currentPlayer=1;
 context.playCard(1,context.state.players[1].hand[0]);
 assert(context.state.trick.length===playsAfterOne,'same player was allowed to play twice in one trick');
+
+// 3. When the two physical 2C cards are split, the other holder is forced to play theirs when reached.
+context.state={players:[player([c('C','2','2c-a'),c('C','9','9c')]),player([c('D','3','d1')]),player([c('C','2','2c-b'),c('D','5','5d')]),player([c('C','7','7c')])],dealer:3,trick:[],trickNumber:0,phase:'passing',leader:null,currentPlayer:null,openingLeadSuit:null};
+context.startFirstTrick();
+legal=context.legalCards(0);
+context.playCard(0,legal[0]);
 context.state.currentPlayer=2;
 legal=context.legalCards(2);
-assert(legal.length===1&&legal[0].id==='2c-c','other 2C holder was not forced to play the 2C');
+assert(legal.length===1&&legal[0].id==='2c-b','other 2C holder was not forced to play the 2C');
+
+// Opening leader identity is frozen once per hand. Run many physically possible two-deck states.
+function seeded(seed){let s=seed>>>0;return()=>{s=(s+0x6D2B79F5)|0;let t=s;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
+for(let seed=1;seed<=512;seed++){
+  const rnd=seeded(seed);
+  const players=Array.from({length:8},(_,seat)=>player([c('D','3',`d-${seed}-${seat}`),c('C','9',`c-${seed}-${seat}`)]));
+  const dealer=Math.floor(rnd()*8);
+  const holderA=Math.floor(rnd()*8);
+  const holderB=rnd()<0.25?holderA:Math.floor(rnd()*8);
+  players[holderA].hand.push(c('C','2',`2c-a-${seed}`));
+  players[holderB].hand.push(c('C','2',`2c-b-${seed}`));
+  const holders=new Set([holderA,holderB]);
+  let expected=null;
+  for(let step=1;step<=8;step++){
+    const seat=(dealer+step)%8;
+    if(holders.has(seat)){expected=seat;break;}
+  }
+  context.state={players,dealer,trick:[],trickNumber:0,phase:'passing',leader:null,currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
+  context.startFirstTrick();
+  assert(context.state.openingLeaderSeat===expected,`seed ${seed}: frozen opening leader mismatch`);
+  assert(context.state.leader===expected&&context.state.currentPlayer===expected,`seed ${seed}: opening turn did not start at required 2C holder`);
+  const opening=context.legalCards(expected);
+  const expectedCopies=holderA===holderB?2:1;
+  assert(opening.length===expectedCopies&&opening.every(card=>card.suit==='C'&&card.rank==='2'),`seed ${seed}: opening legal set was not exactly the holder's 2C card(s)`);
+  const first=opening[0];
+  context.playCard(expected,first);
+  assert(context.state.trick.length===1,`seed ${seed}: first opening card was not accepted`);
+  assert(context.state.trick[0].player===expected&&context.state.trick[0].card.suit==='C'&&context.state.trick[0].card.rank==='2',`seed ${seed}: first physical play was not required 2C`);
+  assert(context.window.__cancellationHeartsRuleInvariants.openingLeader()===expected,`seed ${seed}: opening leader changed after the first 2C left the hand`);
+  if(holderA===holderB)assert(players[expected].hand.filter(card=>card.suit==='C'&&card.rank==='2').length===1,`seed ${seed}: double holder did not retain one 2C`);
+}
 
 // 6. Opening trick forbids penalty cards, but allows diamonds and non-queen spades when void in clubs.
-context.state={players:[player([c('C','2','lead')]),player([c('C','9','club'),c('S','8','spade'),c('H','4','heart')]),player([c('D','7','diamond'),c('S','5','spade2'),c('S','Q','queen-spade'),c('H','6','heart2')])],dealer:2,trick:[{player:0,card:c('C','2','lead'),cancelled:false}],trickNumber:0,phase:'playing',leader:0,currentPlayer:1,openingLeadSuit:'C'};
+context.state={players:[player([c('C','2','lead')]),player([c('C','9','club'),c('S','8','spade'),c('H','4','heart')]),player([c('C','2','other'),c('D','7','diamond'),c('S','5','spade2'),c('S','Q','queen-spade'),c('H','6','heart2')])],dealer:2,trick:[],trickNumber:0,phase:'passing',leader:null,currentPlayer:null,openingLeadSuit:null};
+context.startFirstTrick();
+const openingLead=context.legalCards(context.state.leader)[0];
+context.playCard(context.state.leader,openingLead);
+context.state.currentPlayer=1;
 legal=context.legalCards(1);
 assert(legal.length===1&&legal[0].id==='club','opening follower with clubs could evade the led suit');
 context.state.currentPlayer=2;
 legal=context.legalCards(2);
+assert(legal.length===1&&legal[0].id==='other','2C holder was not forced to play the remaining 2C');
+context.state.players[2].hand=context.state.players[2].hand.filter(card=>card.id!=='other');
+context.state.trick=context.state.trick.filter(play=>play.player!==2);
+legal=context.legalCards(2);
 assert(legal.length===2&&legal.some(card=>card.id==='diamond')&&legal.some(card=>card.id==='spade2'),'club-void opening player was not allowed diamond plus non-queen spade');
 assert(legal.every(card=>context.cardPoints(card)===0),'opening legal set contains a penalty card');
-const beforeIllegal=context.state.trick.length;
-context.playCard(2,context.state.players[2].hand.find(card=>card.id==='queen-spade'));
-assert(context.state.trick.length===beforeIllegal,'queen of spades was accepted on opening trick');
-context.playCard(2,context.state.players[2].hand.find(card=>card.suit==='H'));
-assert(context.state.trick.length===beforeIllegal,'heart was accepted on opening trick');
-context.playCard(2,context.state.players[2].hand.find(card=>card.id==='spade2'));
-assert(context.state.trick.length===beforeIllegal+1,'non-queen spade was incorrectly rejected on opening trick');
 
 // 4. Fully cancelled final trick splits unresolved points by highest-ranked cancelling pair.
 finishRoundCalls=0;baseFinishCalls=0;
@@ -138,4 +178,4 @@ for(const phrase of [
   'highest-ranked canceling pair'
 ])assert(rulesNode.innerHTML.includes(phrase),`rules UI missing: ${phrase}`);
 
-console.log('rule-invariants: revised opening penalty-card rule enforced in engine and UI');
+console.log('rule-invariants: opening authority frozen across 512 physically valid two-deck states; remaining canonical rules enforced');

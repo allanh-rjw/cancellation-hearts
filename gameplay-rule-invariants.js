@@ -7,7 +7,22 @@
   const isTwoClubs=card=>card?.suit==='C'&&card?.rank==='2';
   const isPointCard=card=>cardPoints(card)>0;
   const seatAlreadyPlayed=seat=>state.trick.some(play=>play.player===seat);
-  const openingLeader=()=>firstTwoClubsHolderLeftOfDealer();
+  const liveTwoClubs=()=>state.players.flatMap((player,seat)=>player.hand.filter(isTwoClubs).map(card=>({seat,card})));
+
+  function resolveOpeningLeader(){
+    const twos=liveTwoClubs();
+    if(twos.length!==2)throw new Error(`Opening trick requires exactly two physical 2♣ cards; found ${twos.length}.`);
+    for(let step=1;step<=state.players.length;step++){
+      const seat=(state.dealer+step)%state.players.length;
+      if(twos.some(entry=>entry.seat===seat)){
+        state.openingLeaderSeat=seat;
+        return seat;
+      }
+    }
+    throw new Error('Opening trick could not resolve the required 2♣ leader.');
+  }
+
+  const openingLeader=()=>Number.isInteger(state.openingLeaderSeat)?state.openingLeaderSeat:firstTwoClubsHolderLeftOfDealer();
 
   function openingRoundFeasible(){
     return state.players.every(player=>player.hand.some(card=>
@@ -39,6 +54,7 @@
   };
 
   startFirstTrick=function(){
+    state.openingLeaderSeat=null;
     if(!openingRoundFeasible()){
       state.ruleRedealAttempts=(state.ruleRedealAttempts||0)+1;
       if(state.ruleRedealAttempts>20)throw new Error('Unable to generate a hand with a legal opening trick after 20 attempts.');
@@ -46,11 +62,12 @@
       setTimeout(beginRound,0);
       return;
     }
+    const leader=resolveOpeningLeader();
     state.ruleRedealAttempts=0;
     state.phase='playing';
     state.trickNumber=0;
-    state.leader=openingLeader();
-    state.currentPlayer=state.leader;
+    state.leader=leader;
+    state.currentPlayer=leader;
     state.trick=[];
     state.openingAutoPlayers=new Set();
     state.openingLeadSuit='C';
@@ -152,6 +169,8 @@
   updateRulesUi();
   window.__cancellationHeartsRuleInvariants=Object.freeze({
     installed:true,
+    openingLeader,
+    resolveOpeningLeader,
     openingRoundFeasible,
     openingLegalCards,
     highestCancellingPair,
