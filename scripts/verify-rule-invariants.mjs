@@ -29,7 +29,7 @@ const context={
   beginRound(){beginRoundCalls++;},
   continueTurn(){},renderAll(){},renderTrickCoach(){},
   setStatus(value){status=value;},
-  playCard(playerIndex,card){
+  playCardEngine(playerIndex,card){
     basePlayCalls++;
     const hand=context.state.players[playerIndex].hand;
     const index=hand.findIndex(x=>x.id===card.id);

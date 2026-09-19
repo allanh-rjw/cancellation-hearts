@@ -315,24 +315,12 @@ function legalCards(playerIndex){
   return legal;
 }
 
-function playCard(playerIndex,card){
-  const legalNow=legalCards(playerIndex);
-  if(!legalNow.some(c=>c.id===card.id)) return;
-  const before={trick:state.trick.map(x=>({player:x.player,card:{...x.card},cancelled:x.cancelled})), roundPoints:state.players.map(p=>p.roundPoints), scores:state.players.map(p=>p.score)};
-  if(playerIndex===0){ const rec=rankHumanLegalCards(legalNow)[0]; const plan=buildHandPathway(); state.humanDecisionLog.push({trick:state.trickNumber+1,played:cardLabel(card),recommended:rec?cardLabel(rec.card):null,matched:!!rec&&rec.card.id===card.id,strategy:state.coachStrategy,reason:rec?.reason||'',pathwayPhase:plan.phase,immediateObjective:plan.immediate}); }
-  const action={player:playerIndex,card:{...card},trick:state.trickNumber+1,position:state.trick.length,before,round:state.round};
-  state.actionLog.push(action);
-  if(playerIndex>0){ const name=state.players[playerIndex].name; (state.opponentHistory[name]??=[]).push({...action,playerName:name}); }
-  playCardSound();
-  const p=state.players[playerIndex];
-  p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
-  if(state.trickNumber===0 && !state.openingLeadSuit) state.openingLeadSuit=card.suit;
-  if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;
-  state.trick.push({player:playerIndex,card,cancelled:false});
-  updateCancellation();
-  state.currentPlayer=(state.currentPlayer+1)%8;
-  if(state.trick.length===8) finishTrick(); else continueTurn();
-}
+// playCard is not defined here: gameplay-standard-fixes.js is the sole
+// engine authority (seat-participant-aware trick completion for the
+// double-2♣ same-seat edge case), unconditionally overwriting whatever was
+// here without ever calling back. gameplay-rule-invariants.js then wraps
+// that engine with opening-trick legality guards - see its own
+// playCardEngine reference.
 function updateCancellation(){
   state.trick.forEach(x=>x.cancelled=false);
   const groups={};

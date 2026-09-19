@@ -76,7 +76,7 @@
     continueTurn();
   };
 
-  const basePlayCard=playCard;
+  const basePlayCard=playCardEngine;
   playCard=function(playerIndex,card){
     if(!card||state.phase!=='playing')return;
     if(playerIndex!==state.currentPlayer)return;

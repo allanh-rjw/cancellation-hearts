@@ -75,7 +75,7 @@ continueTurn=function(){
   },Math.round(6000/state.playSpeed));
 };
 
-playCard=function(playerIndex,card){
+function playCardEngine(playerIndex,card){
   if(!card) return;
   const legalNow=legalCards(playerIndex);
   if(!legalNow.some(c=>c.id===card.id)) return;
@@ -100,7 +100,12 @@ playCard=function(playerIndex,card){
   state.currentPlayer=(state.currentPlayer+1)%8;
   if(gameplayTrickComplete()) finishTrick();
   else continueTurn();
-};
+}
+// playCard is reassigned again below by gameplay-rule-invariants.js (opening
+// -trick legality guards) and learning-gateway-runtime.js (evaluate-play
+// telemetry); this line just publishes the base engine under the generic
+// name in case those files are ever removed from the load order.
+playCard=playCardEngine;
 
 // finishTrick is not reassigned here: gameplay-rule-invariants.js is the sole
 // authority for the final-cancellation case (splitting unresolved points
