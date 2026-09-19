@@ -388,6 +388,15 @@
       <div id="scoreDialogBody"></div>
     </dialog>
     <script src="app.js?v=20260918-ai2"></script>
+    <!--
+      Was a gzip+base64 blob (causal/patch.part01-03) fetched, decoded, and
+      eval()'d at runtime by causal-loader.js, overriding app.js's built-in
+      buildHandPathway()/renderHandPathway() once the fetch resolved. Now a
+      plain static tag: the override is applied deterministically before any
+      user interaction, and there's no fetch/decode step left to fail. See
+      the app-layer rebuild plan, Phase 4.
+    -->
+    <script src="hand-pathway-planner.js?v=20260919-static1"></script>
     <script src="gameplay-standard-fixes.js?v=20260918-opening1"></script>
     <script src="gameplay-opponent-lookahead.js?v=20260918-lookahead1"></script>
     <script src="gameplay-moon-fixes.js?v=20260912-moon1"></script>
