@@ -1,0 +1,39 @@
+name: Canonical Rule Invariants
+
+on:
+  pull_request:
+    paths:
+      - gameplay-rule-invariants.js
+      - access-gate.js
+      - docs/rule-invariants.md
+      - scripts/verify-rule-invariants.mjs
+      - scripts/verify-production-rule-loader.mjs
+      - scripts/verify-me21-standard-game.mjs
+      - scripts/verify-gameplay-simulation-qa.mjs
+      - .github/workflows/rule-invariants.yml
+  workflow_dispatch:
+
+jobs:
+  verify-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check rule safety layer
+        run: |
+          node --input-type=module --check < gameplay-rule-invariants.js
+          node --input-type=module --check < access-gate.js
+          node --input-type=module --check < scripts/verify-rule-invariants.mjs
+          node --input-type=module --check < scripts/verify-production-rule-loader.mjs
+          node --input-type=module --check < scripts/verify-me21-standard-game.mjs
+          node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
+      - name: Verify seven canonical rule invariants
+        run: node scripts/verify-rule-invariants.mjs
+      - name: Verify production loader is fail-closed
+        run: node scripts/verify-production-rule-loader.mjs
+      - name: Verify production browser Standard game
+        run: node scripts/verify-me21-standard-game.mjs
+      - name: Run Standard and Shoot-the-Moon simulations
+        run: node scripts/verify-gameplay-simulation-qa.mjs
