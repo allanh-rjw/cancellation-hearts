@@ -38,7 +38,7 @@ const context={
     context.state.trick.push({player:playerIndex,card,cancelled:false});
     context.state.currentPlayer=(playerIndex+1)%context.state.players.length;
   },
-  finishTrick(){baseFinishCalls++;},
+  finishTrickEngine(){baseFinishCalls++;},
   currentLedSuit(){return context.state.openingLeadSuit||context.state.trick[0]?.card.suit||null;},
   gameplayAllHandsEmpty(){return context.state.players.every(player=>player.hand.length===0);},
   practiceShootBroken(winner,points){

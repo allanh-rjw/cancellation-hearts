@@ -327,7 +327,7 @@ function updateCancellation(){
   state.trick.forEach(x=>(groups[x.card.suit+x.card.rank]??=[]).push(x));
   Object.values(groups).forEach(g=>{if(g.length===2)g.forEach(x=>x.cancelled=true);});
 }
-function finishTrick(){
+function finishTrickEngine(){
   const led=currentLedSuit();
   const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
   const trickPoints=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
@@ -364,6 +364,12 @@ function finishTrick(){
   }
   if(state.trickNumber===13) setTimeout(finishRound,350); else $('nextTrickBtn').classList.remove('hidden');
 }
+// finishTrick is reassigned again below by gameplay-rule-invariants.js
+// (final-cancellation point-split) and gameplay-next-trick-flow.js
+// (next-trick UI pacing); this line just publishes the base engine under
+// the generic name in case those files are ever removed from the load
+// order.
+finishTrick=finishTrickEngine;
 function practiceShootBroken(winner,points){
   if(state.mode!=='practice'||points<=0) return false;
   return !practiceShooters().has(winner);
