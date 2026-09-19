@@ -9,7 +9,12 @@ function assert(ok,message){if(!ok)throw new Error(message);}
 assert(access.includes("gameplay-rule-invariants.js?v=20260918-rules1"),'access gate no longer loads canonical rule invariant layer');
 assert(access.includes("gameplay-next-trick-flow.js?v=20260918-nexttrick1"),'access gate no longer loads next-trick flow layer');
 assert(access.includes("await loadRuleInvariants();\n    await loadNextTrickFlow();"),'gameplay guards do not load in the required order');
-assert(access.includes("await loadGameplayGuards();\n        unlock();"),'app can unlock before gameplay guards load');
+const initialGuardLoad=access.lastIndexOf('await loadGameplayGuards();');
+const initialVerify=access.lastIndexOf('await verify({blocking:true});');
+assert(initialGuardLoad>=0&&initialVerify>initialGuardLoad,'app can unlock before gameplay guards load');
+assert(access.includes('const CHECK_INTERVAL_MS=5*60_000;'),'silent access revalidation cadence changed unexpectedly');
+assert(access.includes('const STALE_AFTER_MS=2*60_000;'),'focus/visibility staleness policy changed unexpectedly');
+assert(access.includes("if(!hasAuthorizedSession||accessFailure(error))"),'active session no longer preserves access on transient revalidation failure');
 for(const signature of [
   "function openingRoundFeasible()",
   "card.suit==='C'||card.suit==='D'||(card.suit==='S'&&card.rank!=='Q')",
@@ -36,4 +41,4 @@ for(const signature of [
 
 assert(!rules.includes("if(isPointCard(card)||card.suit==='S')return;"),'obsolete all-spades opening prohibition is still present');
 
-console.log('production-rule-loader: gameplay invariants and coach-aware next-trick flow load before access unlock');
+console.log('production-rule-loader: gameplay guards load before initial access unlock; revalidation remains silent and fail-closed on real access loss');

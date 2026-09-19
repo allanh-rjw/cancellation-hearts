@@ -1,9 +1,12 @@
 (async function installHeartsAccessGate(){
-  const CHECK_INTERVAL_MS=30_000;
+  const CHECK_INTERVAL_MS=5*60_000;
+  const STALE_AFTER_MS=2*60_000;
   const app=document.getElementById('app');
   const root=document.documentElement;
   let checking=null;
   let intervalId=null;
+  let lastVerifiedAt=0;
+  let hasAuthorizedSession=false;
 
   function configuredBaseUrl(){
     const explicit=typeof window.CANCELLATION_HEARTS_GATEWAY_BASE_URL==='string'?window.CANCELLATION_HEARTS_GATEWAY_BASE_URL.trim():'';
@@ -91,19 +94,28 @@
     await loadNextTrickFlow();
   }
 
-  async function verify(){
+  function accessFailure(error){
+    return error?.code==='authorization-denied'||error?.code==='authentication-required';
+  }
+
+  async function verify({blocking=false}={}){
     if(checking)return checking;
     checking=(async()=>{
-      lock('checking');
+      if(blocking||!hasAuthorizedSession)lock('checking');
       try{
         const api=await import('./learning-gateway-client.mjs');
         const client=api.createLearningGatewayClient({baseUrl:configuredBaseUrl()});
         await client.preflight();
         await loadGameplayGuards();
+        hasAuthorizedSession=true;
+        lastVerifiedAt=Date.now();
         unlock();
         return true;
       }catch(error){
-        lock('denied',error);
+        if(!hasAuthorizedSession||accessFailure(error)){
+          hasAuthorizedSession=false;
+          lock('denied',error);
+        }
         return false;
       }finally{
         checking=null;
@@ -112,13 +124,22 @@
     return checking;
   }
 
-  window.CancellationHeartsAccessGate=Object.freeze({verify,status:()=>root.dataset.ulsAccess||'unchecked'});
+  function verifyIfStale(){
+    if(Date.now()-lastVerifiedAt<STALE_AFTER_MS)return;
+    void verify();
+  }
+
+  window.CancellationHeartsAccessGate=Object.freeze({
+    verify:()=>verify(),
+    status:()=>root.dataset.ulsAccess||'unchecked',
+    lastVerifiedAt:()=>lastVerifiedAt
+  });
   lock('checking');
   await loadGameplayGuards();
-  await verify();
+  await verify({blocking:true});
   intervalId=setInterval(()=>{void verify();},CHECK_INTERVAL_MS);
-  window.addEventListener('focus',()=>{void verify();});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void verify();});
+  window.addEventListener('focus',verifyIfStale);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')verifyIfStale();});
   window.addEventListener('pagehide',()=>{if(intervalId)clearInterval(intervalId);},{once:true});
 })().catch(()=>{
   document.documentElement.dataset.ulsAccess='denied';
