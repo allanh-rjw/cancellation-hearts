@@ -75,7 +75,7 @@ continueTurn=function(){
   },Math.round(6000/state.playSpeed));
 };
 
-playCard=function(playerIndex,card){
+function playCardEngine(playerIndex,card){
   if(!card) return;
   const legalNow=legalCards(playerIndex);
   if(!legalNow.some(c=>c.id===card.id)) return;
@@ -100,46 +100,26 @@ playCard=function(playerIndex,card){
   state.currentPlayer=(state.currentPlayer+1)%8;
   if(gameplayTrickComplete()) finishTrick();
   else continueTurn();
-};
-
-// Canonical final-trick rule: when the led suit fully cancels and there is no
-// next trick to receive the carryover, the final-trick leader receives every
-// unresolved penalty point. That leader is also the most recent valid trick
-// winner under the ordinary carryover rule, so this preserves the existing
-// semantics without a retroactive history lookup.
-function gameplayFinalCancellationAward({leader,carryoverPoints,trickPoints}){
-  return {winner:leader,points:carryoverPoints+trickPoints};
 }
+// playCard is reassigned again below by gameplay-rule-invariants.js (opening
+// -trick legality guards) and learning-gateway-runtime.js (evaluate-play
+// telemetry); this line just publishes the base engine under the generic
+// name in case those files are ever removed from the load order.
+playCard=playCardEngine;
 
-const baseGameplayFinishTrick=finishTrick;
-finishTrick=function(){
-  const led=currentLedSuit();
-  const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
-  if(eligible.length||!gameplayAllHandsEmpty()){
-    return baseGameplayFinishTrick();
-  }
-
-  const trickPoints=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
-  const carried=state.carryoverPoints;
-  const {winner,points}=gameplayFinalCancellationAward({leader:state.leader,carryoverPoints:carried,trickPoints});
-  state.currentTrickAward={winner,points,carried,finalCancellation:true};
-  state.players[winner].roundPoints+=points;
-  state.players[winner].tricks.push(...state.carryoverCards,...state.trick.map(x=>x.card));
-  state.carryoverPoints=0;
-  state.carryoverCards=[];
-  renderTrickCoach();
-  state.trickNumber++;
-  state.phase='trick-end';
-  $('nextTrickBtn').classList.add('hidden');
-  setStatus(`The final trick's led suit cancelled completely. ${state.players[winner].name}, the final-trick leader, receives ${points} unresolved penalty point${points===1?'':'s'}.`);
-  renderAll();
-
-  if(state.mode==='practice'&&practiceShootBroken(winner,points)){
-    endBrokenPractice(winner,points);
-    return;
-  }
-  setTimeout(finishRound,350);
-};
+// finishTrick is not reassigned here: gameplay-rule-invariants.js is the sole
+// authority for the final-cancellation case (splitting unresolved points
+// between the highest-ranked cancelling pair, including its own
+// practice-mode moon-break check on every award recipient). It intercepts
+// that case using the exact same condition this file used to check, so this
+// file's old "final-trick leader gets everything" branch could never
+// actually run once both files load together in their real order - it was
+// confirmed-dead code, removed along with its now-redundant test coverage
+// (see verify-rule-invariants.mjs's practice-mode final-cancellation cases).
+// The ordinary (non-final-cancellation) trick-resolution path stays owned by
+// app.js's original finishTrick, reached via gameplay-rule-invariants.js's
+// own delegate-when-not-final-cancellation branch - nothing needs to
+// reassign finishTrick at this layer at all anymore.
 
 renderSeats=function(){
   if(!state.players.length) return;

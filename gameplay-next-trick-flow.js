@@ -51,6 +51,11 @@
     else scheduleAutoAdvance();
   }
 
+  // gameplay-rule-invariants.js wraps its internals in a private IIFE, so its
+  // finishTrickWithFinalCancellation isn't visible by name here - only the
+  // generic finishTrick it publishes is. That's fine: rule-invariants.js is
+  // the last writer of finishTrick before this script runs, so the generic
+  // name is already the stable, fully-resolved contract at this point.
   const baseFinishTrick=finishTrick;
   finishTrick=function(...args){
     const previousTrickNumber=state.trickNumber;

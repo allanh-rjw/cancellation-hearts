@@ -76,7 +76,7 @@
     continueTurn();
   };
 
-  const basePlayCard=playCard;
+  const basePlayCard=playCardEngine;
   playCard=function(playerIndex,card){
     if(!card||state.phase!=='playing')return;
     if(playerIndex!==state.currentPlayer)return;
@@ -115,12 +115,11 @@
     ];
   }
 
-  const baseFinishTrick=finishTrick;
-  finishTrick=function(){
+  function finishTrickWithFinalCancellation(){
     const led=currentLedSuit();
     const eligible=state.trick.filter(play=>play.card.suit===led&&!play.cancelled);
     const finalTrick=gameplayAllHandsEmpty();
-    if(!finalTrick||eligible.length)return baseFinishTrick();
+    if(!finalTrick||eligible.length)return finishTrickEngine();
 
     const pair=highestCancellingPair(state.trick,led);
     if(!pair)throw new Error('Final cancelled trick has no cancelling pair in the led suit.');
@@ -146,7 +145,11 @@
       if(outsider){endBrokenPractice(outsider.player,outsider.points);return;}
     }
     setTimeout(finishRound,350);
-  };
+  }
+  // finishTrick is reassigned again below by gameplay-next-trick-flow.js
+  // (next-trick UI pacing); this line just publishes this layer under the
+  // generic name in case that file is ever removed from the load order.
+  finishTrick=finishTrickWithFinalCancellation;
 
   function updateRulesUi(){
     const rules=document.querySelector('#rulesDialog .rules-copy');

@@ -173,38 +173,9 @@ function takeSpecific(deck,suit,rank){
 function addPattern(hand,deck,pattern){
   for(const [s,r,n=1] of pattern) for(let k=0;k<n;k++){const c=takeSpecific(deck,s,r);if(c)hand.push(c);}
 }
-function dealPracticeRound(){
-  const deck=shuffle(makeDeck());
-  const human=state.players[0].hand;
-  const soloPatterns={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['S','A',1],['S','K',1],['D','A',1],['C','A',1]],
-    strong:[['H','A',2],['H','K',2],['H','Q',1],['H','J',1],['H','10',1],['S','A',1],['S','K',1],['S','Q',1],['D','A',1],['C','A',1],['C','K',1]],
-    solid:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['D','A',1],['D','K',1],['C','A',1],['C','7',1]],
-    marginal:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','9',1],['S','A',1],['S','Q',1],['D','A',1],['D','8',1],['C','K',1],['C','7',1],['C','4',1],['S','5',1]]
-  };
-  const twoPatterns={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
-    strong:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['C','A',1],['C','K',1],['D','A',1],['D','8',1],['S','6',1],['C','4',1]],
-    solid:[['H','A',1],['H','K',1],['H','Q',1],['H','10',1],['H','8',1],['S','Q',1],['S','K',1],['C','A',1],['C','J',1],['D','K',1],['D','8',1],['S','5',1],['C','4',1]],
-    marginal:[['H','K',1],['H','Q',1],['H','10',1],['H','8',1],['S','Q',1],['S','K',1],['C','A',1],['C','9',1],['D','J',1],['D','7',1],['S','5',1],['C','4',1],['D','3',1]]
-  };
-  const pattern=(state.practiceType==='solo'?soloPatterns:twoPatterns)[state.practiceStrength] || (state.practiceType==='solo'?soloPatterns.strong:twoPatterns.strong);
-  addPattern(human,deck,pattern);
-  while(human.length<13)human.push(deck.pop());
-  if(state.practiceType==='two'&&state.partnerIndex){
-    const partner=state.players[state.partnerIndex].hand;
-    const weak=SUITS.filter(s=>human.filter(c=>c.suit===s&&RANK_VALUE[c.rank]>=12).length===0);
-    for(const suit of weak){for(const rank of ['A','K']){const c=takeSpecific(deck,suit,rank);if(c&&partner.length<13)partner.push(c);}}
-    for(const [s,r] of [['H','A'],['H','K'],['S','Q'],['D','A'],['C','A']]){const c=takeSpecific(deck,s,r);if(c&&partner.length<13)partner.push(c);}
-    while(partner.length<13)partner.push(deck.pop());
-  }
-  let cursor=1;
-  while(deck.length){
-    if(cursor===state.partnerIndex&&state.practiceType==='two'){cursor=cursor%7+1;continue;}
-    if(state.players[cursor].hand.length<13)state.players[cursor].hand.push(deck.pop());
-    cursor=cursor%7+1;
-  }
-}
+// dealPracticeRound is not defined here: gameplay-moon-calibration.js is the
+// sole authority (a richer, monotonic-strength pattern set), unconditionally
+// overwriting whatever was here without ever calling back.
 
 function makeDeck(){
   let deck=[]; let id=0;
@@ -313,16 +284,10 @@ function firstTwoClubsHolderLeftOfDealer(){
   }
   throw new Error('Opening trick requires at least one 2♣');
 }
-function startTrick(){ state.trick=[]; state.currentTrickAward=null; state.phase='playing'; state.currentPlayer=state.leader; state.openingLeadSuit=null; renderAll(); continueTurn(); }
-function continueTurn(){
-  if(state.trickNumber===0){
-    while(state.openingAutoPlayers.has(state.currentPlayer) && state.trick.length<8) state.currentPlayer=(state.currentPlayer+1)%8;
-  }
-  renderAll();
-  if(state.currentPlayer===0){ setStatus('Your turn. Choose a legal card.'); renderHand(); renderTrickCoach(); return; }
-  setStatus(`${state.players[state.currentPlayer].name} is thinking…`);
-  setTimeout(()=>playCard(state.currentPlayer,chooseAiCard(state.currentPlayer)),Math.round(6000/state.playSpeed));
-}
+// startTrick and continueTurn are not defined here: gameplay-standard-fixes.js
+// is the sole authority (seat-participant-aware turn sequencing for the
+// double-2♣ same-seat edge case), unconditionally overwriting whatever was
+// here without ever calling back.
 function currentLedSuit(){
   if(state.trickNumber===0) return state.openingLeadSuit;
   return state.trick[0]?.card.suit||null;
@@ -350,31 +315,19 @@ function legalCards(playerIndex){
   return legal;
 }
 
-function playCard(playerIndex,card){
-  const legalNow=legalCards(playerIndex);
-  if(!legalNow.some(c=>c.id===card.id)) return;
-  const before={trick:state.trick.map(x=>({player:x.player,card:{...x.card},cancelled:x.cancelled})), roundPoints:state.players.map(p=>p.roundPoints), scores:state.players.map(p=>p.score)};
-  if(playerIndex===0){ const rec=rankHumanLegalCards(legalNow)[0]; const plan=buildHandPathway(); state.humanDecisionLog.push({trick:state.trickNumber+1,played:cardLabel(card),recommended:rec?cardLabel(rec.card):null,matched:!!rec&&rec.card.id===card.id,strategy:state.coachStrategy,reason:rec?.reason||'',pathwayPhase:plan.phase,immediateObjective:plan.immediate}); }
-  const action={player:playerIndex,card:{...card},trick:state.trickNumber+1,position:state.trick.length,before,round:state.round};
-  state.actionLog.push(action);
-  if(playerIndex>0){ const name=state.players[playerIndex].name; (state.opponentHistory[name]??=[]).push({...action,playerName:name}); }
-  playCardSound();
-  const p=state.players[playerIndex];
-  p.hand.splice(p.hand.findIndex(c=>c.id===card.id),1);
-  if(state.trickNumber===0 && !state.openingLeadSuit) state.openingLeadSuit=card.suit;
-  if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;
-  state.trick.push({player:playerIndex,card,cancelled:false});
-  updateCancellation();
-  state.currentPlayer=(state.currentPlayer+1)%8;
-  if(state.trick.length===8) finishTrick(); else continueTurn();
-}
+// playCard is not defined here: gameplay-standard-fixes.js is the sole
+// engine authority (seat-participant-aware trick completion for the
+// double-2♣ same-seat edge case), unconditionally overwriting whatever was
+// here without ever calling back. gameplay-rule-invariants.js then wraps
+// that engine with opening-trick legality guards - see its own
+// playCardEngine reference.
 function updateCancellation(){
   state.trick.forEach(x=>x.cancelled=false);
   const groups={};
   state.trick.forEach(x=>(groups[x.card.suit+x.card.rank]??=[]).push(x));
   Object.values(groups).forEach(g=>{if(g.length===2)g.forEach(x=>x.cancelled=true);});
 }
-function finishTrick(){
+function finishTrickEngine(){
   const led=currentLedSuit();
   const eligible=state.trick.filter(x=>x.card.suit===led&&!x.cancelled);
   const trickPoints=state.trick.reduce((sum,x)=>sum+cardPoints(x.card),0);
@@ -411,11 +364,17 @@ function finishTrick(){
   }
   if(state.trickNumber===13) setTimeout(finishRound,350); else $('nextTrickBtn').classList.remove('hidden');
 }
+// finishTrick is reassigned again below by gameplay-rule-invariants.js
+// (final-cancellation point-split) and gameplay-next-trick-flow.js
+// (next-trick UI pacing); this line just publishes the base engine under
+// the generic name in case those files are ever removed from the load
+// order.
+finishTrick=finishTrickEngine;
 function practiceShootBroken(winner,points){
   if(state.mode!=='practice'||points<=0) return false;
   return !practiceShooters().has(winner);
 }
-function endBrokenPractice(winner,points){
+function endBrokenPracticeEngine(winner,points){
   state.practiceEnded=true; state.gameOver=true; state.phase='practice-end';
   $('nextTrickBtn').classList.add('hidden'); $('nextRoundBtn').classList.add('hidden');
   const breaker=state.players[winner].name;
@@ -425,9 +384,14 @@ function endBrokenPractice(winner,points){
   state.lastPostAnalysis=buildPostGameAnalysis(`Practice ended when ${breaker} broke the ${target}.`);
   renderPostHandAnalysis(); renderPostGameAnalysis(); renderOpponentAnalysis(); renderAll();
 }
+// endBrokenPractice is reassigned again below by gameplay-moon-calibration.js
+// (adds a practiceSuccess=false side effect); this line just publishes the
+// base engine under the generic name callers use, so it works even if that
+// file is ever removed from the load order.
+endBrokenPractice=endBrokenPracticeEngine;
 function cardPoints(c){ return c.suit==='H'?1:(c.suit==='S'&&c.rank==='Q'?13:0); }
 
-function finishRound(){
+function finishRoundEngine(){
   const scorers=state.players.map((p,i)=>({i,pts:p.roundPoints})).filter(x=>x.pts>0);
   let msg='';
   if(scorers.length===1 && scorers[0].pts===52){
@@ -457,6 +421,11 @@ function finishRound(){
     state.gameOver=true; setStatus(`${msg} Game over. ${winners} ${winners.includes(' and ')?'win':'wins'} with ${low} points.`);
   } else { setStatus(msg); state.round++; state.dealer=(state.dealer+1)%8; $('nextRoundBtn').classList.remove('hidden'); }
 }
+// finishRound is reassigned again below by gameplay-moon-fixes.js and
+// gameplay-moon-calibration.js (practice-mode scoring); this line just
+// publishes the base engine under the generic name in case those files are
+// ever removed from the load order.
+finishRound=finishRoundEngine;
 
 function difficultyProfile(){
   return {
@@ -748,7 +717,7 @@ function practiceThreatState(){
   const threshold=difficultyProfile().moonThreshold;
   return {credible:outsiderPoints===0&&(points>=threshold||queenCaptured),points,outsiderPoints,shooters};
 }
-function practiceDefenseAdjustment(i,c){
+function practiceDefenseAdjustmentEngine(i,c){
   if(state.mode!=='practice') return 0;
   const threat=practiceThreatState();
   const shooters=threat.shooters;
@@ -792,6 +761,11 @@ function practiceDefenseAdjustment(i,c){
   s += (state.learningProfile?.defenseBoost||0)*4;
   return s;
 }
+// practiceDefenseAdjustment is reassigned again below by
+// gameplay-moon-fixes.js (Partner control-forecast bonus); this line just
+// publishes the base engine under the generic name in case that file is
+// ever removed from the load order.
+practiceDefenseAdjustment=practiceDefenseAdjustmentEngine;
 function standardMoonThreat(collectors,concentrated,repeatedControl){
   if(!collectors.length||collectors.length>2) return false;
   return concentrated>=difficultyProfile().moonThreshold||
@@ -890,20 +864,10 @@ function renderAll(){
   renderSeats(); renderTrick(); renderHand();
 }
 function renderScores(){}
-function renderSeats(){
-  if(!state.players.length) return;
-  $('seatMap').innerHTML=state.players.map((p,i)=>{
-    const badges=[];
-    if(i===state.dealer) badges.push('<span class="badge">Dealer</span>');
-    if(i===state.leader && state.phase!=='passing') badges.push('<span class="badge">Leads</span>');
-    if(i===state.currentPlayer && state.phase==='playing') badges.push('<span class="badge">Turn</span>');
-    const played=state.trick.find(x=>x.player===i);
-    const trickScore=currentTrickScoreFor(i);
-    const handScore=handScoreBeforeCurrentTrick(i);
-    const personaLine=i>0&&state.showPersonas?`<div class="meta persona-seat">${p.persona}</div>`:'';
-    return `<div class="seat seat-${i} ${i===0?'human':''} ${state.currentPlayer===i&&state.phase==='playing'?'active':''}"><div class="seat-top"><strong>${p.name}</strong><span class="seat-number">SEAT ${i+1}</span></div>${personaLine}<div class="seat-scores"><span><b>Trick</b> ${trickScore}</span><span><b>Hand</b> ${handScore}</span></div><div class="meta">${p.hand.length} cards</div><div class="badges">${badges.join('')}</div>${played?`<div class="seat-played-card">${cardHtml(played.card,played.cancelled?'cancelled':'')}</div>`:''}</div>`;
-  }).join('');
-}
+// renderSeats is not defined here: gameplay-standard-fixes.js is the sole
+// authority (handles multiple physical cards per seat for the double-2♣
+// same-seat edge case), unconditionally overwriting whatever was here
+// without ever calling back.
 function currentTrickStatus(){
   if(!state.trick.length) return {winner:null,points:state.carryoverPoints};
   if(state.phase==='trick-end'&&state.currentTrickAward) return state.currentTrickAward;
@@ -935,7 +899,10 @@ function playCardSound(){
     noise.connect(filter).connect(gain).connect(ctx.destination);noise.start(now);noise.stop(now+.06);
   }catch(e){}
 }
-function renderTrick(){ const carry=state.carryoverPoints?` · ${state.carryoverPoints} carried point${state.carryoverPoints===1?'':'s'} at stake`:''; $('trick').innerHTML=(state.trick.length||state.carryoverPoints)?`<div class="trick-summary">${state.trick.length} of 8 cards played${carry}</div>`:''; }
+// renderTrick is not defined here: gameplay-standard-fixes.js is the sole
+// authority (accounts for the double-2♣/empty-seat physical-vs-logical card
+// count), unconditionally overwriting whatever was here without ever
+// calling back.
 function renderHand(){
   if(!state.players.length) return;
   const legalIds=new Set(state.phase==='playing'&&state.currentPlayer===0?legalCards(0).map(c=>c.id):[]);
@@ -1547,7 +1514,7 @@ function handEvolutionForPlay(card,sim){
 
   return {value,notes,dup,higherLive,safeNow};
 }
-function cardDecisionScores(card){
+function cardDecisionScoresEngine(card){
   const sim=simulatePlay(card), rank=RANK_VALUE[card.rank], penalty=cardPoints(card), following=state.trick.length>0;
   const evolution=handEvolutionForPlay(card,sim);
   let board=50, score=50, strategy=50;
@@ -1586,6 +1553,11 @@ function cardDecisionScores(card){
   }
   return {board:clamp(board),score:clamp(score),strategy:clamp(strategy),sim,evolution};
 }
+// cardDecisionScores is reassigned again below by gameplay-moon-fixes.js
+// (Shoot-the-Moon control-forecast adjustment); this line just publishes the
+// base engine under the generic name in case that file is ever removed from
+// the load order.
+cardDecisionScores=cardDecisionScoresEngine;
 function clamp(n){return Math.max(0,Math.min(100,n));}
 function rankHumanLegalCards(legal=state.currentPlayer===0&&state.phase==='playing'?legalCards(0):[]){
   const w=state.coachWeights,total=w.board+w.score+w.strategy||1;
@@ -1630,7 +1602,7 @@ function moonRecommendationDetails(card,f){
   if(f.evolution?.notes?.length) parts.push(...f.evolution.notes.slice(0,1));
   return parts;
 }
-function recommendationReason(card,f){
+function recommendationReasonEngine(card,f){
   if(state.coachStrategy==='soloMoon'||state.coachStrategy==='twoMoon'){
     return [...moonRecommendationDetails(card,f),...pathwayImpactReason(card,f).slice(0,2)].join('; ')+'.';
   }
@@ -1644,6 +1616,11 @@ function recommendationReason(card,f){
   parts.push(...pathwayImpactReason(card,f).slice(0,2));
   return parts.join('; ')+'.';
 }
+// recommendationReason is reassigned again below by gameplay-moon-fixes.js
+// (appends a control-forecast clause); this line just publishes the base
+// engine under the generic name in case that file is ever removed from the
+// load order.
+recommendationReason=recommendationReasonEngine;
 function renderCardRecommendation(){
   const box=$('cardRecommendation'); if(!box||!state.players.length)return;
   renderCurrentStrategicState();

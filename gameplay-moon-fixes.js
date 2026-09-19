@@ -29,7 +29,7 @@ function moonControlDepth(playerIndex,suit){
   }
   return depth;
 }
-function moonLeadForecast(playerIndex,card){
+function moonLeadForecastEngine(playerIndex,card){
   const higher=moonHigherOutside(playerIndex,card);
   const twin=moonOutsideCount(playerIndex,card.suit,card.rank);
   const depth=moonControlDepth(playerIndex,card.suit);
@@ -55,9 +55,17 @@ function moonLeadForecast(playerIndex,card){
   }
   return {score,higher,twin,depth,notes};
 }
-function moonShooterForecast(playerIndex,card){
+// moonLeadForecast is reassigned again below by gameplay-moon-calibration.js
+// (pair-aware control adjustments); this line just publishes the base
+// engine under the generic name in case that file is ever removed from the
+// load order.
+moonLeadForecast=moonLeadForecastEngine;
+function moonShooterForecastEngine(playerIndex,card){
   const shooters=practiceShooters();
   const following=state.trick.length>0;
+  // Calls the generic name (not moonLeadForecastEngine) deliberately: by the
+  // time this runs, gameplay-moon-calibration.js has already installed its
+  // pair-aware wrap, and a leading shooter should get that same enhancement.
   if(!following) return moonLeadForecast(playerIndex,card);
   const projected=currentWinningPlayerIfPlayed(card,playerIndex);
   const points=state.carryoverPoints+state.trick.reduce((n,x)=>n+cardPoints(x.card),0)+cardPoints(card);
@@ -73,8 +81,13 @@ function moonShooterForecast(playerIndex,card){
   if(projected===playerIndex) score+=10;
   return {score,projected,points,notes};
 }
+// moonShooterForecast is reassigned again below by
+// gameplay-moon-calibration.js (two-player pair-balance adjustments); this
+// line just publishes the base engine under the generic name in case that
+// file is ever removed from the load order.
+moonShooterForecast=moonShooterForecastEngine;
 
-const baseMoonCardDecisionScores=cardDecisionScores;
+const baseMoonCardDecisionScores=cardDecisionScoresEngine;
 cardDecisionScores=function(card){
   const base=baseMoonCardDecisionScores(card);
   if(state.mode!=='practice'||(state.coachStrategy!=='soloMoon'&&state.coachStrategy!=='twoMoon')) return base;
@@ -96,7 +109,7 @@ cardDecisionScores=function(card){
   return base;
 };
 
-const baseMoonRecommendationReason=recommendationReason;
+const baseMoonRecommendationReason=recommendationReasonEngine;
 recommendationReason=function(card,f){
   const reason=baseMoonRecommendationReason(card,f);
   if(state.mode!=='practice'||!f?.moonForecast) return reason;
@@ -105,7 +118,7 @@ recommendationReason=function(card,f){
   return `${reason.replace(/\.$/,'')}; control forecast: ${evidence}.`;
 };
 
-const basePracticeDefenseAdjustment=practiceDefenseAdjustment;
+const basePracticeDefenseAdjustment=practiceDefenseAdjustmentEngine;
 practiceDefenseAdjustment=function(i,c){
   const base=basePracticeDefenseAdjustment(i,c);
   if(state.mode!=='practice'||state.practiceType!=='two'||i!==state.partnerIndex) return base;
@@ -116,9 +129,12 @@ practiceDefenseAdjustment=function(i,c){
   return base+forecast.score*scale;
 };
 
-const baseFinishRoundForMoonPractice=finishRound;
-finishRound=function(){
-  if(state.mode!=='practice') return baseFinishRoundForMoonPractice();
+// finishRoundPracticeOutcome (not the generic finishRound name - see
+// gameplay-moon-calibration.js, which composes on top of this and is the
+// sole assigner of the generic name) preserves the standard-mode scoring
+// engine unchanged and only replaces practice-mode scoring.
+function finishRoundPracticeOutcome(){
+  if(state.mode!=='practice') return finishRoundEngine();
 
   const shooters=practiceShooters();
   const shooterPoints=[...shooters].reduce((n,i)=>n+(state.players[i]?.roundPoints||0),0);

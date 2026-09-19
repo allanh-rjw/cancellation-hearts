@@ -8,6 +8,7 @@ let beginRoundCalls=0;
 let baseFinishCalls=0;
 let basePlayCalls=0;
 let status='';
+let endBrokenCalls=[];
 
 const RANK_VALUE={2:2,3:3,4:4,5:5,6:6,7:7,8:8,9:9,10:10,J:11,Q:12,K:13,A:14};
 const context={
@@ -28,7 +29,7 @@ const context={
   beginRound(){beginRoundCalls++;},
   continueTurn(){},renderAll(){},renderTrickCoach(){},
   setStatus(value){status=value;},
-  playCard(playerIndex,card){
+  playCardEngine(playerIndex,card){
     basePlayCalls++;
     const hand=context.state.players[playerIndex].hand;
     const index=hand.findIndex(x=>x.id===card.id);
@@ -37,10 +38,14 @@ const context={
     context.state.trick.push({player:playerIndex,card,cancelled:false});
     context.state.currentPlayer=(playerIndex+1)%context.state.players.length;
   },
-  finishTrick(){baseFinishCalls++;},
+  finishTrickEngine(){baseFinishCalls++;},
   currentLedSuit(){return context.state.openingLeadSuit||context.state.trick[0]?.card.suit||null;},
   gameplayAllHandsEmpty(){return context.state.players.every(player=>player.hand.length===0);},
-  practiceShootBroken(){return false;},endBrokenPractice(){},
+  practiceShootBroken(winner,points){
+    if(context.state.mode!=='practice'||points<=0)return false;
+    return !(context.state.shooters||[]).includes(winner);
+  },
+  endBrokenPractice(winner,points){endBrokenCalls.push({winner,points});},
   finishRound(){finishRoundCalls++;},setTimeout(fn){fn();},
   $(){return{classList:{add(){},remove(){}}};}
 };
@@ -166,6 +171,38 @@ assert(context.state.currentTrickAward.awards[0].player===0&&context.state.curre
 assert(context.state.players[0].roundPoints===4&&context.state.players[1].roundPoints===3,'odd 7-point split did not conserve points as 4/3');
 assert(context.state.players.reduce((sum,p)=>sum+p.roundPoints,0)===7,'final split did not conserve total points');
 assert(finishRoundCalls===1,'final split did not finish the round');
+
+// Practice-mode final cancellation must check EVERY split-award recipient for
+// a moon break, not just a single leader (gameplay-standard-fixes.js's older
+// leader-only practice model is unreachable once this file's finishTrick
+// intercepts final cancellation first, and was removed as dead code).
+function finalCancellationTrick(mode,shooters){
+  return {
+    players:Array.from({length:8},(_,i)=>({name:`P${i}`,hand:[],roundPoints:0,tricks:[]})),
+    dealer:0,leader:4,trickNumber:12,phase:'playing',openingLeadSuit:null,carryoverPoints:5,carryoverCards:[],currentTrickAward:null,
+    trick:[
+      {player:0,card:c('C','K','pck-a'),cancelled:true},
+      {player:1,card:c('C','K','pck-b'),cancelled:true},
+      {player:2,card:c('C','9','pc9-a'),cancelled:true},
+      {player:3,card:c('C','9','pc9-b'),cancelled:true},
+      {player:4,card:c('H','2','ph2'),cancelled:false},
+      {player:5,card:c('H','3','ph3'),cancelled:false},
+      {player:6,card:c('D','5','pd5'),cancelled:false},
+      {player:7,card:c('D','6','pd6'),cancelled:false}
+    ],mode,shooters
+  };
+}
+endBrokenCalls=[];finishRoundCalls=0;
+context.state=finalCancellationTrick('practice',[0,1]);
+context.finishTrick();
+assert(endBrokenCalls.length===0,'legitimate two-player moon split incorrectly flagged as broken');
+assert(finishRoundCalls===1,'legitimate moon continuation did not finish the round');
+
+endBrokenCalls=[];finishRoundCalls=0;
+context.state=finalCancellationTrick('practice',[0]);
+context.finishTrick();
+assert(endBrokenCalls.length===1&&endBrokenCalls[0].winner===1&&endBrokenCalls[0].points===3,'outsider capturing split points did not break the solo moon');
+assert(finishRoundCalls===0,'broken moon incorrectly finished the round');
 
 // UI must state the same invariants enforced by the engine.
 for(const phrase of [
