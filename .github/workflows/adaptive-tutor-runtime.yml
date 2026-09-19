@@ -20,6 +20,7 @@ jobs:
           files=(
             app.js
             gameplay-standard-fixes.js
+            gameplay-next-trick-flow.js
             gameplay-moon-fixes.js
             gameplay-moon-calibration.js
             adaptive-trainer/contracts/contract-utils.js
@@ -69,6 +70,7 @@ jobs:
             scripts/diagnose-standard-opponent-ai.mjs
             scripts/verify-gameplay-simulation.mjs
             scripts/verify-gameplay-simulation-qa.mjs
+            scripts/verify-gameplay-simulation-fast-transitions.mjs
             scripts/qa-gameplay-runtime-patch.js
             scripts/verify-me21-standard-game.mjs
             scripts/verify-me21-final-trick.mjs
@@ -115,5 +117,5 @@ jobs:
       - name: Verify deterministic opponent diagnostic harness
         run: node scripts/diagnose-standard-opponent-ai.mjs --verify
       - name: Run deterministic standard and moon-practice gameplay simulations
-        # This is the cross-product regression gate after Tutor validation.
-        run: node scripts/verify-gameplay-simulation-qa.mjs
+        # This is the cross-product regression gate after Tutor validation. UI pacing is verified separately.
+        run: node scripts/verify-gameplay-simulation-fast-transitions.mjs
