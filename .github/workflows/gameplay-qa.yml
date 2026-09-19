@@ -5,16 +5,12 @@ on:
     paths:
       - app.js
       - gameplay-standard-fixes.js
-      - gameplay-rule-invariants.js
       - gameplay-opponent-lookahead.js
       - gameplay-moon-fixes.js
       - gameplay-moon-calibration.js
-      - access-gate.js
       - index.html
       - style.css
       - scripts/verify-final-trick-cancellation.mjs
-      - scripts/verify-rule-invariants.mjs
-      - scripts/verify-production-rule-loader.mjs
       - scripts/verify-standard-opponent-ai.mjs
       - scripts/diagnose-standard-opponent-ai.mjs
       - scripts/diagnose-opponent-lookahead.mjs
@@ -38,14 +34,10 @@ jobs:
       - name: Syntax check gameplay QA
         run: |
           node --input-type=module --check < gameplay-standard-fixes.js
-          node --input-type=module --check < gameplay-rule-invariants.js
           node --input-type=module --check < gameplay-opponent-lookahead.js
           node --input-type=module --check < gameplay-moon-fixes.js
           node --input-type=module --check < gameplay-moon-calibration.js
-          node --input-type=module --check < access-gate.js
           node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
-          node --input-type=module --check < scripts/verify-rule-invariants.mjs
-          node --input-type=module --check < scripts/verify-production-rule-loader.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
@@ -55,10 +47,8 @@ jobs:
           node --input-type=module --check < scripts/verify-opponent-lookahead.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
-      - name: Verify canonical gameplay rule invariants
-        run: node scripts/verify-rule-invariants.mjs
-      - name: Verify production invariant loader
-        run: node scripts/verify-production-rule-loader.mjs
+      - name: Verify final-trick full-cancellation rule
+        run: node scripts/verify-final-trick-cancellation.mjs
       - name: Verify standard opponent decisions
         run: node scripts/verify-standard-opponent-ai.mjs
       - name: Verify deterministic opponent diagnostic harness
@@ -72,4 +62,5 @@ jobs:
       - name: Compare Prompt 3 and Prompt 4 on paired deals
         run: node scripts/diagnose-opponent-lookahead.mjs
       - name: Run standard and Shoot-the-Moon gameplay simulations
+        # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
         run: node scripts/verify-gameplay-simulation-qa.mjs
