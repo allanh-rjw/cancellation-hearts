@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Guard against compressed source-replacement deployment payloads
+        run: node scripts/verify-no-compressed-source-payloads.mjs
       - name: Check runtime, assessment, calibration, gateway, and simulation module syntax
         shell: bash
         run: |
@@ -71,7 +73,6 @@ jobs:
             scripts/verify-gameplay-simulation.mjs
             scripts/verify-gameplay-simulation-qa.mjs
             scripts/verify-gameplay-simulation-fast-transitions.mjs
-            scripts/qa-gameplay-runtime-patch.js
             scripts/verify-me21-standard-game.mjs
             scripts/verify-me21-final-trick.mjs
             scripts/verify-me21-standard-lifecycle.mjs
