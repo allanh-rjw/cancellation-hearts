@@ -31,14 +31,14 @@ function usefulVoidCandidates(m){
   }).filter(x=>x.count>0).sort((a,b)=>a.score-b.score);
 }
 function protectedCardsForPlan(m){
-  const protected=[];
+  const guarded=[];
   const sp=spadeSystemAssessment(m);
-  if(sp.queen) protected.push(...sp.veryLow.slice(0,2));
+  if(sp.queen) guarded.push(...sp.veryLow.slice(0,2));
   const bySuit=SUITS.flatMap(s=>lowCardsBySuit(m,s).slice(0,1));
   for(const c of bySuit){
-    if(!protected.some(x=>x.id===c.id) && RANK_VALUE[c.rank]<=6) protected.push(c);
+    if(!guarded.some(x=>x.id===c.id) && RANK_VALUE[c.rank]<=6) guarded.push(c);
   }
-  return protected;
+  return guarded;
 }
 function likelyLiabilityCards(m){
   const sp=spadeSystemAssessment(m), hearts=heartLiabilityAssessment(m);
