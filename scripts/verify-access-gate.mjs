@@ -7,7 +7,7 @@ import { once } from 'node:events';
 
 const root=process.cwd();
 const mime=new Map([['.html','text/html; charset=utf-8'],['.js','text/javascript; charset=utf-8'],['.mjs','text/javascript; charset=utf-8'],['.css','text/css; charset=utf-8'],['.json','application/json; charset=utf-8']]);
-let authorized=false;
+let accessMode='denied';
 function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function chromeBinary(){const bins=[process.env.CHROME_BIN,'google-chrome-stable','google-chrome','chromium','chromium-browser'].filter(Boolean);return bins.find(bin=>spawnSync(bin,['--version'],{stdio:'ignore'}).status===0)??(()=>{throw new Error('Chrome/Chromium is required');})();}
 async function waitForDebugPort(profile,chrome,stderr){const file=join(profile,'DevToolsActivePort');for(let i=0;i<150;i++){if(existsSync(file)){const port=Number(readFileSync(file,'utf8').split(/\r?\n/)[0]);if(Number.isInteger(port)&&port>0)return port;}if(chrome.exitCode!==null)throw new Error(`Chrome exited before DevTools started: ${stderr().slice(-1000)}`);await sleep(100);}throw new Error('Chrome DevTools endpoint did not start');}
@@ -18,12 +18,13 @@ async function waitFor(evaluate,expression,label){for(let i=0;i<100;i++){const v
 const server=createServer((req,res)=>{try{
   const requested=new URL(req.url,'http://localhost').pathname;
   if(requested==='/v1/domains/cancellation-hearts/access-preflight'){
-    if(!authorized){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}
+    if(accessMode==='denied'){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}
+    if(accessMode==='transient'){res.writeHead(503,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'runtime-unavailable',retryable:true}}));return;}
     res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
     res.end(JSON.stringify({domainId:'cancellation-hearts',packVersion:'0.1.0',operation:'access-preflight',requestId:'gate-test',correlationId:'gate-test',disposition:'completed',output:{authorized:true},provenanceRefs:['gate-test'],learning:{snapshotVersion:1,evidenceIds:[]}}));return;
   }
   if(requested.startsWith('/v1/domains/')){res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({status:'error',error:{code:'authorization-denied',retryable:false}}));return;}
-  const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file))??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));
+  const rel=requested==='/'?'index.html':decodeURIComponent(requested.slice(1));const clean=normalize(rel).replace(/^(\.\.(\/|\\|$))+/, '');const file=join(root,clean);if(!statSync(file).isFile())throw new Error('not file');res.writeHead(200,{'content-type':mime.get(extname(file)]??'application/octet-stream','cache-control':'no-store'});res.end(readFileSync(file));
 }catch{res.writeHead(404);res.end('not found');}});
 
 server.listen(0,'127.0.0.1');await once(server,'listening');const appPort=server.address().port;const baseUrl=`http://127.0.0.1:${appPort}`;const profile=mkdtempSync(join(tmpdir(),'hearts-access-gate-'));let chromeError='';const chrome=spawn(chromeBinary(),['--headless=new','--no-sandbox','--disable-gpu','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});chrome.stderr.on('data',chunk=>{chromeError+=String(chunk);});
@@ -37,13 +38,24 @@ try{
     if(!snapshot.overlay.includes('access is not active'))throw new Error(`revoked learner: denial message missing ${snapshot.overlay}`);
     ws.close();
   }
-  authorized=true;
+  accessMode='authorized';
   {
     const {ws,send,evaluate}=await browserSession(debugPort);await send('Page.navigate',{url:baseUrl});
     await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'`,'active learner');
-    const snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
+    let snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
     if(snapshot.gate!=='active'||snapshot.overlay||snapshot.hidden==='true'||snapshot.inert===true)throw new Error(`active learner: app did not unlock ${JSON.stringify(snapshot)}`);
+
+    accessMode='transient';
+    const transientResult=await evaluate(`window.CancellationHeartsAccessGate.verify()`);
+    snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
+    if(transientResult!==false||snapshot.gate!=='active'||snapshot.overlay||snapshot.hidden==='true'||snapshot.inert===true)throw new Error(`transient revalidation interrupted active learner ${JSON.stringify({transientResult,snapshot})}`);
+
+    accessMode='denied';
+    const deniedResult=await evaluate(`window.CancellationHeartsAccessGate.verify()`);
+    await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='denied'`,'revoked active learner');
+    snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:document.getElementById('ulsAccessGate')?.textContent??'',hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
+    if(deniedResult!==false||snapshot.gate!=='denied'||snapshot.hidden!=='true'||snapshot.inert!==true||!snapshot.overlay.includes('access is not active'))throw new Error(`revocation recheck did not fail closed ${JSON.stringify({deniedResult,snapshot})}`);
     ws.close();
   }
-  console.log('access-gate: revoked learner fails closed; active learner unlocks');
+  console.log('access-gate: initial denial fails closed; active revalidation is silent on transient failure and locks on revocation');
 }finally{chrome.kill('SIGTERM');if(chrome.exitCode===null)await once(chrome,'exit');server.close();}
