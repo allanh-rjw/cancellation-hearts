@@ -58,15 +58,22 @@ assert(context.state.leader===1,'opening leader is not first 2C holder clockwise
 assert(context.state.currentPlayer===1,'opening current player does not match required leader');
 assert(status.includes('must lead exactly one copy'),'opening status does not state forced 2C lead');
 
-// Impossible post-pass state must be redealt rather than violating opening rules.
+// Impossible post-pass state exists only when a player holds nothing but opening penalty cards.
+beginRoundCalls=0;
+context.state={players:[player([c('C','2','lead')]),player([c('S','Q','sq'),c('H','4','h4')]),player([c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
+context.startFirstTrick();
+assert(beginRoundCalls===1,'penalty-only opening state was not rejected and redealt');
+assert(context.state.phase==='passing','penalty-only opening state entered play');
+assert(status.includes('Redealing'),'unplayable opening did not explain the redeal');
+
+// A non-queen spade makes a club-void hand playable on trick 1.
 beginRoundCalls=0;
 context.state={players:[player([c('C','2','lead')]),player([c('S','8','s8'),c('H','4','h4')]),player([c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
 context.startFirstTrick();
-assert(beginRoundCalls===1,'unplayable opening state was not rejected and redealt');
-assert(context.state.phase==='passing','unplayable opening state entered play');
-assert(status.includes('Redealing'),'unplayable opening did not explain the redeal');
+assert(beginRoundCalls===0,'legal non-queen spade incorrectly triggered a redeal');
+assert(context.state.phase==='playing','legal non-queen spade hand did not enter play');
 
-// 2, 3, 6. Double holder plays exactly one; all other holders are forced; nobody plays twice.
+// 2, 3, 5. Double holder plays exactly one; all other holders are forced; nobody plays twice.
 context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a'),c('C','2','2c-b'),c('C','9','9c')]),player([c('C','2','2c-c'),c('D','5','5d')]),player([c('C','7','7c')])],dealer:0,trick:[],trickNumber:0,phase:'playing',leader:1,currentPlayer:1,openingLeadSuit:'C'};
 let legal=context.legalCards(1);
 assert(legal.length===2&&legal.every(card=>card.suit==='C'&&card.rank==='2'),'double 2C holder was not restricted to a 2C');
@@ -80,21 +87,23 @@ context.state.currentPlayer=2;
 legal=context.legalCards(2);
 assert(legal.length===1&&legal[0].id==='2c-c','other 2C holder was not forced to play the 2C');
 
-// 4, 7. No spades and no point cards on opening trick; club-following remains mandatory.
-context.state={players:[player([c('C','2','lead')]),player([c('C','9','club'),c('S','8','spade'),c('H','4','heart')]),player([c('D','7','diamond'),c('S','5','spade2'),c('H','6','heart2')])],dealer:2,trick:[{player:0,card:c('C','2','lead'),cancelled:false}],trickNumber:0,phase:'playing',leader:0,currentPlayer:1,openingLeadSuit:'C'};
+// 6. Opening trick forbids penalty cards, but allows diamonds and non-queen spades when void in clubs.
+context.state={players:[player([c('C','2','lead')]),player([c('C','9','club'),c('S','8','spade'),c('H','4','heart')]),player([c('D','7','diamond'),c('S','5','spade2'),c('S','Q','queen-spade'),c('H','6','heart2')])],dealer:2,trick:[{player:0,card:c('C','2','lead'),cancelled:false}],trickNumber:0,phase:'playing',leader:0,currentPlayer:1,openingLeadSuit:'C'};
 legal=context.legalCards(1);
 assert(legal.length===1&&legal[0].id==='club','opening follower with clubs could evade the led suit');
 context.state.currentPlayer=2;
 legal=context.legalCards(2);
-assert(legal.length===1&&legal[0].id==='diamond','club-void opening player was not restricted to a diamond');
-assert(legal.every(card=>card.suit!=='S'&&context.cardPoints(card)===0),'opening legal set contains a spade or point card');
+assert(legal.length===2&&legal.some(card=>card.id==='diamond')&&legal.some(card=>card.id==='spade2'),'club-void opening player was not allowed diamond plus non-queen spade');
+assert(legal.every(card=>context.cardPoints(card)===0),'opening legal set contains a penalty card');
 const beforeIllegal=context.state.trick.length;
-context.playCard(2,context.state.players[2].hand.find(card=>card.suit==='S'));
-assert(context.state.trick.length===beforeIllegal,'opening spade was accepted by playCard hard guard');
+context.playCard(2,context.state.players[2].hand.find(card=>card.id==='queen-spade'));
+assert(context.state.trick.length===beforeIllegal,'queen of spades was accepted on opening trick');
 context.playCard(2,context.state.players[2].hand.find(card=>card.suit==='H'));
-assert(context.state.trick.length===beforeIllegal,'opening point card was accepted by playCard hard guard');
+assert(context.state.trick.length===beforeIllegal,'heart was accepted on opening trick');
+context.playCard(2,context.state.players[2].hand.find(card=>card.id==='spade2'));
+assert(context.state.trick.length===beforeIllegal+1,'non-queen spade was incorrectly rejected on opening trick');
 
-// 5. Fully cancelled final trick splits unresolved points by highest-ranked cancelling pair.
+// 4. Fully cancelled final trick splits unresolved points by highest-ranked cancelling pair.
 finishRoundCalls=0;baseFinishCalls=0;
 context.state={
   players:Array.from({length:8},(_,i)=>({name:`P${i}`,hand:[],roundPoints:0,tricks:[]})),
@@ -123,9 +132,10 @@ for(const phrase of [
   'first player clockwise from the dealer holding a 2♣ must lead exactly one 2♣',
   'Every other player holding a 2♣ must play exactly one when reached',
   'only one card to a trick',
-  'may never contain a point card or any spade',
-  'hand is redealt before play begins',
+  'may discard a diamond or a spade other than the queen of spades',
+  'Hearts and queens of spades are illegal on the opening trick',
+  'contains only hearts and queen(s) of spades',
   'highest-ranked canceling pair'
 ])assert(rulesNode.innerHTML.includes(phrase),`rules UI missing: ${phrase}`);
 
-console.log('rule-invariants: 7 canonical rules plus unplayable-opening redeal enforced in engine and UI');
+console.log('rule-invariants: revised opening penalty-card rule enforced in engine and UI');

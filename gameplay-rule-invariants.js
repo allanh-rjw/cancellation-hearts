@@ -10,7 +10,9 @@
   const openingLeader=()=>firstTwoClubsHolderLeftOfDealer();
 
   function openingRoundFeasible(){
-    return state.players.every(player=>player.hand.some(card=>card.suit==='C'||card.suit==='D'));
+    return state.players.every(player=>player.hand.some(card=>
+      card.suit==='C'||card.suit==='D'||(card.suit==='S'&&card.rank!=='Q')
+    ));
   }
 
   function openingLegalCards(playerIndex){
@@ -24,9 +26,9 @@
     const clubs=hand.filter(card=>card.suit==='C');
     if(clubs.length)return clubs;
 
-    // Opening trick may never contain points or spades. A player void in clubs
-    // therefore may discard only a diamond.
-    return hand.filter(card=>card.suit==='D'&&!isPointCard(card));
+    // Opening trick may never contain penalty cards. A player void in clubs
+    // may discard a diamond or any spade other than the queen of spades.
+    return hand.filter(card=>!isPointCard(card)&&(card.suit==='D'||card.suit==='S'));
   }
 
   const baseLegalCards=legalCards;
@@ -40,7 +42,7 @@
     if(!openingRoundFeasible()){
       state.ruleRedealAttempts=(state.ruleRedealAttempts||0)+1;
       if(state.ruleRedealAttempts>20)throw new Error('Unable to generate a hand with a legal opening trick after 20 attempts.');
-      setStatus('Redealing: at least one player has no legal opening-trick card under the no-points/no-spades rule.');
+      setStatus('Redealing: at least one player holds only opening-trick penalty cards (hearts and queen(s) of spades).');
       setTimeout(beginRound,0);
       return;
     }
@@ -64,7 +66,7 @@
     if(seatAlreadyPlayed(playerIndex))return;
 
     if(state.trickNumber===0){
-      if(isPointCard(card)||card.suit==='S')return;
+      if(isPointCard(card))return;
       if(state.trick.length===0&&(playerIndex!==openingLeader()||!isTwoClubs(card)))return;
       if(state.players[playerIndex].hand.some(isTwoClubs)&&!isTwoClubs(card))return;
     }
@@ -139,7 +141,7 @@
       <p>If every card in the led suit cancels before the final trick, the trick has no winner. Its penalty points carry into the next trick, and the same player leads again. The next player to win a trick collects both the new points and all carried points.</p>
       <p>The 2♣ cards may be passed. On the opening trick, the first player clockwise from the dealer holding a 2♣ must lead exactly one 2♣. A player holding both copies plays exactly one. Every other player holding a 2♣ must play exactly one when reached.</p>
       <p>Every player may contribute only one card to a trick. No player may play twice in the same trick.</p>
-      <p>The opening trick may never contain a point card or any spade. Players must follow clubs when able; a player void in clubs may discard only a diamond. If a post-pass hand leaves any player with no legal opening card, the hand is redealt before play begins.</p>
+      <p>The opening trick may never contain a penalty-point card. Players must follow clubs when able; a player void in clubs may discard a diamond or a spade other than the queen of spades. Hearts and queens of spades are illegal on the opening trick. If a post-pass hand contains only hearts and queen(s) of spades, the hand is redealt before play begins.</p>
       <p>If the final trick has no uncancelled card in the led suit, all unresolved penalty points are split between the two players who played the highest-ranked canceling pair. Whole points are split as evenly as possible; any odd remainder goes to the earlier-played member of that pair.</p>
       <p>Hearts are broken only when a heart is discarded.</p>
       <p>Passing rotates: one seat left, one right, two left, two right, three left, three right, across, then hold.</p>

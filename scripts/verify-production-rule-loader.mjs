@@ -9,17 +9,20 @@ assert(access.includes("gameplay-rule-invariants.js?v=20260918-rules1"),'access 
 assert(access.includes("await loadRuleInvariants();\n        unlock();"),'app can unlock before rule invariants load');
 for(const signature of [
   "function openingRoundFeasible()",
+  "card.suit==='C'||card.suit==='D'||(card.suit==='S'&&card.rank!=='Q')",
   "if(!openingRoundFeasible())",
   "setTimeout(beginRound,0);",
   "if(seatAlreadyPlayed(playerIndex))return [];",
   "if(state.trick.length===0&&playerIndex!==openingLeader())return [];",
   "if(twoClubs.length)return twoClubs;",
-  "return hand.filter(card=>card.suit==='D'&&!isPointCard(card));",
+  "return hand.filter(card=>!isPointCard(card)&&(card.suit==='D'||card.suit==='S'));",
   "if(playerIndex!==state.currentPlayer)return;",
-  "if(isPointCard(card)||card.suit==='S')return;",
+  "if(isPointCard(card))return;",
   "if(state.players[playerIndex].hand.some(isTwoClubs)&&!isTwoClubs(card))return;",
   "const pair=highestCancellingPair(state.trick,led);",
   "state.currentTrickAward={winner:null,points:total,carried,finalCancellation:true,split:true,awards};"
 ])assert(rules.includes(signature),`canonical rule guard missing: ${signature}`);
 
-console.log('production-rule-loader: canonical invariant layer loads before access unlock and rejects unplayable openings');
+assert(!rules.includes("if(isPointCard(card)||card.suit==='S')return;"),'obsolete all-spades opening prohibition is still present');
+
+console.log('production-rule-loader: revised opening penalty-card rule loads before access unlock');
