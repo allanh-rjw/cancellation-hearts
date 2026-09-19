@@ -86,7 +86,7 @@ function strongPartnerScoringHandoff(lead){
 // so the coach does not secretly optimize against a different model than the
 // explanation it presents. Strong additionally recognizes a protected loaded
 // heart handoff when Partner still needs to become the second scorer.
-const baseMoonLeadForecastForPairControl=moonLeadForecast;
+const baseMoonLeadForecastForPairControl=moonLeadForecastEngine;
 moonLeadForecast=function(playerIndex,card){
   const forecast=baseMoonLeadForecastForPairControl(playerIndex,card);
   if(state.mode!=='practice'||state.practiceType!=='two'||state.partnerIndex==null) return forecast;
@@ -132,7 +132,7 @@ moonLeadForecast=function(playerIndex,card){
 // A two-player moon requires both members of the pair to become actual
 // collectors. Once one member has scored and the other has not, loaded tricks
 // should preferentially establish the zero-point member.
-const baseMoonShooterForecastForPairBalance=moonShooterForecast;
+const baseMoonShooterForecastForPairBalance=moonShooterForecastEngine;
 moonShooterForecast=function(playerIndex,card){
   const forecast=baseMoonShooterForecastForPairBalance(playerIndex,card);
   if(state.mode!=='practice'||state.practiceType!=='two'||state.trick.length===0) return forecast;
@@ -155,12 +155,12 @@ moonShooterForecast=function(playerIndex,card){
   return forecast;
 };
 
-const baseEndBrokenPracticeForOutcome=endBrokenPractice;
+const baseEndBrokenPracticeForOutcome=endBrokenPracticeEngine;
 endBrokenPractice=function(winner,points){
   state.practiceSuccess=false;
   return baseEndBrokenPracticeForOutcome(winner,points);
 };
-const baseFinishRoundForOutcome=finishRound;
+const baseFinishRoundForOutcome=finishRoundPracticeOutcome;
 finishRound=function(){
   if(state.mode==='practice'){
     const shooters=practiceShooters();

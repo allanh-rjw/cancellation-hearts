@@ -380,7 +380,7 @@ function practiceShootBroken(winner,points){
   if(state.mode!=='practice'||points<=0) return false;
   return !practiceShooters().has(winner);
 }
-function endBrokenPractice(winner,points){
+function endBrokenPracticeEngine(winner,points){
   state.practiceEnded=true; state.gameOver=true; state.phase='practice-end';
   $('nextTrickBtn').classList.add('hidden'); $('nextRoundBtn').classList.add('hidden');
   const breaker=state.players[winner].name;
@@ -390,9 +390,14 @@ function endBrokenPractice(winner,points){
   state.lastPostAnalysis=buildPostGameAnalysis(`Practice ended when ${breaker} broke the ${target}.`);
   renderPostHandAnalysis(); renderPostGameAnalysis(); renderOpponentAnalysis(); renderAll();
 }
+// endBrokenPractice is reassigned again below by gameplay-moon-calibration.js
+// (adds a practiceSuccess=false side effect); this line just publishes the
+// base engine under the generic name callers use, so it works even if that
+// file is ever removed from the load order.
+endBrokenPractice=endBrokenPracticeEngine;
 function cardPoints(c){ return c.suit==='H'?1:(c.suit==='S'&&c.rank==='Q'?13:0); }
 
-function finishRound(){
+function finishRoundEngine(){
   const scorers=state.players.map((p,i)=>({i,pts:p.roundPoints})).filter(x=>x.pts>0);
   let msg='';
   if(scorers.length===1 && scorers[0].pts===52){
@@ -422,6 +427,11 @@ function finishRound(){
     state.gameOver=true; setStatus(`${msg} Game over. ${winners} ${winners.includes(' and ')?'win':'wins'} with ${low} points.`);
   } else { setStatus(msg); state.round++; state.dealer=(state.dealer+1)%8; $('nextRoundBtn').classList.remove('hidden'); }
 }
+// finishRound is reassigned again below by gameplay-moon-fixes.js and
+// gameplay-moon-calibration.js (practice-mode scoring); this line just
+// publishes the base engine under the generic name in case those files are
+// ever removed from the load order.
+finishRound=finishRoundEngine;
 
 function difficultyProfile(){
   return {
@@ -713,7 +723,7 @@ function practiceThreatState(){
   const threshold=difficultyProfile().moonThreshold;
   return {credible:outsiderPoints===0&&(points>=threshold||queenCaptured),points,outsiderPoints,shooters};
 }
-function practiceDefenseAdjustment(i,c){
+function practiceDefenseAdjustmentEngine(i,c){
   if(state.mode!=='practice') return 0;
   const threat=practiceThreatState();
   const shooters=threat.shooters;
@@ -757,6 +767,11 @@ function practiceDefenseAdjustment(i,c){
   s += (state.learningProfile?.defenseBoost||0)*4;
   return s;
 }
+// practiceDefenseAdjustment is reassigned again below by
+// gameplay-moon-fixes.js (Partner control-forecast bonus); this line just
+// publishes the base engine under the generic name in case that file is
+// ever removed from the load order.
+practiceDefenseAdjustment=practiceDefenseAdjustmentEngine;
 function standardMoonThreat(collectors,concentrated,repeatedControl){
   if(!collectors.length||collectors.length>2) return false;
   return concentrated>=difficultyProfile().moonThreshold||
@@ -1505,7 +1520,7 @@ function handEvolutionForPlay(card,sim){
 
   return {value,notes,dup,higherLive,safeNow};
 }
-function cardDecisionScores(card){
+function cardDecisionScoresEngine(card){
   const sim=simulatePlay(card), rank=RANK_VALUE[card.rank], penalty=cardPoints(card), following=state.trick.length>0;
   const evolution=handEvolutionForPlay(card,sim);
   let board=50, score=50, strategy=50;
@@ -1544,6 +1559,11 @@ function cardDecisionScores(card){
   }
   return {board:clamp(board),score:clamp(score),strategy:clamp(strategy),sim,evolution};
 }
+// cardDecisionScores is reassigned again below by gameplay-moon-fixes.js
+// (Shoot-the-Moon control-forecast adjustment); this line just publishes the
+// base engine under the generic name in case that file is ever removed from
+// the load order.
+cardDecisionScores=cardDecisionScoresEngine;
 function clamp(n){return Math.max(0,Math.min(100,n));}
 function rankHumanLegalCards(legal=state.currentPlayer===0&&state.phase==='playing'?legalCards(0):[]){
   const w=state.coachWeights,total=w.board+w.score+w.strategy||1;
@@ -1588,7 +1608,7 @@ function moonRecommendationDetails(card,f){
   if(f.evolution?.notes?.length) parts.push(...f.evolution.notes.slice(0,1));
   return parts;
 }
-function recommendationReason(card,f){
+function recommendationReasonEngine(card,f){
   if(state.coachStrategy==='soloMoon'||state.coachStrategy==='twoMoon'){
     return [...moonRecommendationDetails(card,f),...pathwayImpactReason(card,f).slice(0,2)].join('; ')+'.';
   }
@@ -1602,6 +1622,11 @@ function recommendationReason(card,f){
   parts.push(...pathwayImpactReason(card,f).slice(0,2));
   return parts.join('; ')+'.';
 }
+// recommendationReason is reassigned again below by gameplay-moon-fixes.js
+// (appends a control-forecast clause); this line just publishes the base
+// engine under the generic name in case that file is ever removed from the
+// load order.
+recommendationReason=recommendationReasonEngine;
 function renderCardRecommendation(){
   const box=$('cardRecommendation'); if(!box||!state.players.length)return;
   renderCurrentStrategicState();
