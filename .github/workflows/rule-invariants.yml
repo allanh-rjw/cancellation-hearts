@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - gameplay-rule-invariants.js
+      - gameplay-opening-enforcement.js
       - gameplay-next-trick-flow.js
       - access-gate.js
       - docs/rule-invariants.md
@@ -27,6 +28,7 @@ jobs:
       - name: Syntax check rule safety layer
         run: |
           node --input-type=module --check < gameplay-rule-invariants.js
+          node --input-type=module --check < gameplay-opening-enforcement.js
           node --input-type=module --check < gameplay-next-trick-flow.js
           node --input-type=module --check < access-gate.js
           node --input-type=module --check < scripts/verify-rule-invariants.mjs
@@ -35,7 +37,7 @@ jobs:
           node --input-type=module --check < scripts/verify-me21-standard-game.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-fast-transitions.mjs
-      - name: Verify seven canonical rule invariants
+      - name: Verify canonical rule invariants and 512-state opening campaign
         run: node scripts/verify-rule-invariants.mjs
       - name: Verify coach-aware next trick flow
         run: node scripts/verify-next-trick-flow.mjs
