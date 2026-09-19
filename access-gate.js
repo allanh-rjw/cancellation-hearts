@@ -64,6 +64,17 @@
     document.getElementById('ulsAccessGate')?.remove();
   }
 
+  function loadRuleInvariants(){
+    if(window.__cancellationHeartsRuleInvariants?.installed)return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='gameplay-rule-invariants.js?v=20260918-rules1';
+      script.onload=()=>window.__cancellationHeartsRuleInvariants?.installed?resolve():reject(new Error('Gameplay rule invariants did not install.'));
+      script.onerror=()=>reject(new Error('Unable to load gameplay-rule-invariants.js'));
+      document.head.appendChild(script);
+    });
+  }
+
   async function verify(){
     if(checking)return checking;
     checking=(async()=>{
@@ -72,6 +83,7 @@
         const api=await import('./learning-gateway-client.mjs');
         const client=api.createLearningGatewayClient({baseUrl:configuredBaseUrl()});
         await client.preflight();
+        await loadRuleInvariants();
         unlock();
         return true;
       }catch(error){
@@ -86,6 +98,7 @@
 
   window.CancellationHeartsAccessGate=Object.freeze({verify,status:()=>root.dataset.ulsAccess||'unchecked'});
   lock('checking');
+  await loadRuleInvariants();
   await verify();
   intervalId=setInterval(()=>{void verify();},CHECK_INTERVAL_MS);
   window.addEventListener('focus',()=>{void verify();});
