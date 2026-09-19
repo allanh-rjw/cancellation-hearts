@@ -8,6 +8,9 @@ function assert(ok,message){if(!ok)throw new Error(message);}
 assert(access.includes("gameplay-rule-invariants.js?v=20260918-rules1"),'access gate no longer loads canonical rule invariant layer');
 assert(access.includes("await loadRuleInvariants();\n        unlock();"),'app can unlock before rule invariants load');
 for(const signature of [
+  "function openingRoundFeasible()",
+  "if(!openingRoundFeasible())",
+  "setTimeout(beginRound,0);",
   "if(seatAlreadyPlayed(playerIndex))return [];",
   "if(state.trick.length===0&&playerIndex!==openingLeader())return [];",
   "if(twoClubs.length)return twoClubs;",
@@ -19,4 +22,4 @@ for(const signature of [
   "state.currentTrickAward={winner:null,points:total,carried,finalCancellation:true,split:true,awards};"
 ])assert(rules.includes(signature),`canonical rule guard missing: ${signature}`);
 
-console.log('production-rule-loader: canonical invariant layer loads before access unlock');
+console.log('production-rule-loader: canonical invariant layer loads before access unlock and rejects unplayable openings');
