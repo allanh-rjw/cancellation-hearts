@@ -1,6 +1,6 @@
 (async function installHeartsAccessGate(){
-  const CHECK_INTERVAL_MS=5*60_000;
-  const STALE_AFTER_MS=2*60_000;
+  const CHECK_INTERVAL_MS=60*60_000;
+  const STALE_AFTER_MS=60*60_000;
   const app=document.getElementById('app');
   const root=document.documentElement;
   let checking=null;
