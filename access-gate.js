@@ -78,6 +78,17 @@
     });
   }
 
+  function loadOpeningEnforcement(){
+    if(window.__cancellationHeartsOpeningEnforcement?.installed)return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='gameplay-opening-enforcement.js?v=20260918-opening2';
+      script.onload=()=>window.__cancellationHeartsOpeningEnforcement?.installed?resolve():reject(new Error('Opening rule enforcement did not install.'));
+      script.onerror=()=>reject(new Error('Unable to load gameplay-opening-enforcement.js'));
+      document.head.appendChild(script);
+    });
+  }
+
   function loadNextTrickFlow(){
     if(window.__cancellationHeartsNextTrickFlow?.installed)return Promise.resolve();
     return new Promise((resolve,reject)=>{
@@ -91,6 +102,7 @@
 
   async function loadGameplayGuards(){
     await loadRuleInvariants();
+    await loadOpeningEnforcement();
     await loadNextTrickFlow();
   }
 
