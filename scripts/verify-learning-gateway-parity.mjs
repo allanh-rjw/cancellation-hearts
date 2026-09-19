@@ -12,6 +12,7 @@ import {
 const appSource=readFileSync(new URL("../app.js",import.meta.url),"utf8");
 const runtimeSource=readFileSync(new URL("../learning-gateway-runtime.js",import.meta.url),"utf8");
 const productionHarness=readFileSync(new URL("./verify-production-domain-pack-integration.mjs",import.meta.url),"utf8");
+const standardFixesSource=readFileSync(new URL("../gameplay-standard-fixes.js",import.meta.url),"utf8");
 
 for(const signature of [
   "function legalCards(playerIndex)",
@@ -23,9 +24,14 @@ for(const signature of [
   "function currentMoonThreat()",
   "function renderOpponentAnalysis()",
   "function renderPostHandAnalysis()",
-  "function renderPostGameAnalysis()",
-  "function playCard(playerIndex,card)"
+  "function renderPostGameAnalysis()"
 ])assert.ok(appSource.includes(signature),`real app learning seam changed: ${signature}`);
+
+// playCard's canonical engine implementation moved to gameplay-standard-fixes.js
+// (app-layer rebuild Phase 2: named-engine refactor) - app.js's own copy was
+// confirmed-dead code (unconditionally overwritten without ever being
+// called) and was removed.
+assert.ok(standardFixesSource.includes("function playCardEngine(playerIndex,card)"),"real app learning seam changed: function playCardEngine(playerIndex,card)");
 
 for(const signature of [
   "const DEFAULT_MODE='gateway'",
