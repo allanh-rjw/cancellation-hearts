@@ -8,6 +8,7 @@ on:
       - gameplay-opponent-lookahead.js
       - gameplay-moon-fixes.js
       - gameplay-moon-calibration.js
+      - gameplay-next-trick-flow.js
       - index.html
       - style.css
       - scripts/verify-final-trick-cancellation.mjs
@@ -20,6 +21,7 @@ on:
       - scripts/verify-opponent-lookahead.mjs
       - scripts/verify-gameplay-simulation.mjs
       - scripts/verify-gameplay-simulation-qa.mjs
+      - scripts/verify-gameplay-simulation-fast-transitions.mjs
       - .github/workflows/gameplay-qa.yml
   workflow_dispatch:
 
@@ -37,6 +39,7 @@ jobs:
           node --input-type=module --check < gameplay-opponent-lookahead.js
           node --input-type=module --check < gameplay-moon-fixes.js
           node --input-type=module --check < gameplay-moon-calibration.js
+          node --input-type=module --check < gameplay-next-trick-flow.js
           node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
@@ -47,6 +50,7 @@ jobs:
           node --input-type=module --check < scripts/verify-opponent-lookahead.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
+          node --input-type=module --check < scripts/verify-gameplay-simulation-fast-transitions.mjs
       - name: Verify final-trick full-cancellation rule
         run: node scripts/verify-final-trick-cancellation.mjs
       - name: Verify standard opponent decisions
@@ -63,4 +67,4 @@ jobs:
         run: node scripts/diagnose-opponent-lookahead.mjs
       - name: Run standard and Shoot-the-Moon gameplay simulations
         # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
-        run: node scripts/verify-gameplay-simulation-qa.mjs
+        run: node scripts/verify-gameplay-simulation-fast-transitions.mjs
