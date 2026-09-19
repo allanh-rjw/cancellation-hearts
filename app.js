@@ -173,38 +173,9 @@ function takeSpecific(deck,suit,rank){
 function addPattern(hand,deck,pattern){
   for(const [s,r,n=1] of pattern) for(let k=0;k<n;k++){const c=takeSpecific(deck,s,r);if(c)hand.push(c);}
 }
-function dealPracticeRound(){
-  const deck=shuffle(makeDeck());
-  const human=state.players[0].hand;
-  const soloPatterns={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',2],['H','J',2],['H','10',1],['S','A',1],['S','K',1],['D','A',1],['C','A',1]],
-    strong:[['H','A',2],['H','K',2],['H','Q',1],['H','J',1],['H','10',1],['S','A',1],['S','K',1],['S','Q',1],['D','A',1],['C','A',1],['C','K',1]],
-    solid:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['H','8',1],['S','A',1],['S','K',1],['S','Q',1],['D','A',1],['D','K',1],['C','A',1],['C','7',1]],
-    marginal:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','9',1],['S','A',1],['S','Q',1],['D','A',1],['D','8',1],['C','K',1],['C','7',1],['C','4',1],['S','5',1]]
-  };
-  const twoPatterns={
-    ridiculous:[['H','A',2],['H','K',2],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['C','A',1],['C','K',1],['D','A',1],['D','K',1]],
-    strong:[['H','A',1],['H','K',1],['H','Q',1],['H','J',1],['H','10',1],['S','Q',1],['S','A',1],['C','A',1],['C','K',1],['D','A',1],['D','8',1],['S','6',1],['C','4',1]],
-    solid:[['H','A',1],['H','K',1],['H','Q',1],['H','10',1],['H','8',1],['S','Q',1],['S','K',1],['C','A',1],['C','J',1],['D','K',1],['D','8',1],['S','5',1],['C','4',1]],
-    marginal:[['H','K',1],['H','Q',1],['H','10',1],['H','8',1],['S','Q',1],['S','K',1],['C','A',1],['C','9',1],['D','J',1],['D','7',1],['S','5',1],['C','4',1],['D','3',1]]
-  };
-  const pattern=(state.practiceType==='solo'?soloPatterns:twoPatterns)[state.practiceStrength] || (state.practiceType==='solo'?soloPatterns.strong:twoPatterns.strong);
-  addPattern(human,deck,pattern);
-  while(human.length<13)human.push(deck.pop());
-  if(state.practiceType==='two'&&state.partnerIndex){
-    const partner=state.players[state.partnerIndex].hand;
-    const weak=SUITS.filter(s=>human.filter(c=>c.suit===s&&RANK_VALUE[c.rank]>=12).length===0);
-    for(const suit of weak){for(const rank of ['A','K']){const c=takeSpecific(deck,suit,rank);if(c&&partner.length<13)partner.push(c);}}
-    for(const [s,r] of [['H','A'],['H','K'],['S','Q'],['D','A'],['C','A']]){const c=takeSpecific(deck,s,r);if(c&&partner.length<13)partner.push(c);}
-    while(partner.length<13)partner.push(deck.pop());
-  }
-  let cursor=1;
-  while(deck.length){
-    if(cursor===state.partnerIndex&&state.practiceType==='two'){cursor=cursor%7+1;continue;}
-    if(state.players[cursor].hand.length<13)state.players[cursor].hand.push(deck.pop());
-    cursor=cursor%7+1;
-  }
-}
+// dealPracticeRound is not defined here: gameplay-moon-calibration.js is the
+// sole authority (a richer, monotonic-strength pattern set), unconditionally
+// overwriting whatever was here without ever calling back.
 
 function makeDeck(){
   let deck=[]; let id=0;
@@ -313,16 +284,10 @@ function firstTwoClubsHolderLeftOfDealer(){
   }
   throw new Error('Opening trick requires at least one 2♣');
 }
-function startTrick(){ state.trick=[]; state.currentTrickAward=null; state.phase='playing'; state.currentPlayer=state.leader; state.openingLeadSuit=null; renderAll(); continueTurn(); }
-function continueTurn(){
-  if(state.trickNumber===0){
-    while(state.openingAutoPlayers.has(state.currentPlayer) && state.trick.length<8) state.currentPlayer=(state.currentPlayer+1)%8;
-  }
-  renderAll();
-  if(state.currentPlayer===0){ setStatus('Your turn. Choose a legal card.'); renderHand(); renderTrickCoach(); return; }
-  setStatus(`${state.players[state.currentPlayer].name} is thinking…`);
-  setTimeout(()=>playCard(state.currentPlayer,chooseAiCard(state.currentPlayer)),Math.round(6000/state.playSpeed));
-}
+// startTrick and continueTurn are not defined here: gameplay-standard-fixes.js
+// is the sole authority (seat-participant-aware turn sequencing for the
+// double-2♣ same-seat edge case), unconditionally overwriting whatever was
+// here without ever calling back.
 function currentLedSuit(){
   if(state.trickNumber===0) return state.openingLeadSuit;
   return state.trick[0]?.card.suit||null;
@@ -890,20 +855,10 @@ function renderAll(){
   renderSeats(); renderTrick(); renderHand();
 }
 function renderScores(){}
-function renderSeats(){
-  if(!state.players.length) return;
-  $('seatMap').innerHTML=state.players.map((p,i)=>{
-    const badges=[];
-    if(i===state.dealer) badges.push('<span class="badge">Dealer</span>');
-    if(i===state.leader && state.phase!=='passing') badges.push('<span class="badge">Leads</span>');
-    if(i===state.currentPlayer && state.phase==='playing') badges.push('<span class="badge">Turn</span>');
-    const played=state.trick.find(x=>x.player===i);
-    const trickScore=currentTrickScoreFor(i);
-    const handScore=handScoreBeforeCurrentTrick(i);
-    const personaLine=i>0&&state.showPersonas?`<div class="meta persona-seat">${p.persona}</div>`:'';
-    return `<div class="seat seat-${i} ${i===0?'human':''} ${state.currentPlayer===i&&state.phase==='playing'?'active':''}"><div class="seat-top"><strong>${p.name}</strong><span class="seat-number">SEAT ${i+1}</span></div>${personaLine}<div class="seat-scores"><span><b>Trick</b> ${trickScore}</span><span><b>Hand</b> ${handScore}</span></div><div class="meta">${p.hand.length} cards</div><div class="badges">${badges.join('')}</div>${played?`<div class="seat-played-card">${cardHtml(played.card,played.cancelled?'cancelled':'')}</div>`:''}</div>`;
-  }).join('');
-}
+// renderSeats is not defined here: gameplay-standard-fixes.js is the sole
+// authority (handles multiple physical cards per seat for the double-2♣
+// same-seat edge case), unconditionally overwriting whatever was here
+// without ever calling back.
 function currentTrickStatus(){
   if(!state.trick.length) return {winner:null,points:state.carryoverPoints};
   if(state.phase==='trick-end'&&state.currentTrickAward) return state.currentTrickAward;
@@ -935,7 +890,10 @@ function playCardSound(){
     noise.connect(filter).connect(gain).connect(ctx.destination);noise.start(now);noise.stop(now+.06);
   }catch(e){}
 }
-function renderTrick(){ const carry=state.carryoverPoints?` · ${state.carryoverPoints} carried point${state.carryoverPoints===1?'':'s'} at stake`:''; $('trick').innerHTML=(state.trick.length||state.carryoverPoints)?`<div class="trick-summary">${state.trick.length} of 8 cards played${carry}</div>`:''; }
+// renderTrick is not defined here: gameplay-standard-fixes.js is the sole
+// authority (accounts for the double-2♣/empty-seat physical-vs-logical card
+// count), unconditionally overwriting whatever was here without ever
+// calling back.
 function renderHand(){
   if(!state.players.length) return;
   const legalIds=new Set(state.phase==='playing'&&state.currentPlayer===0?legalCards(0).map(c=>c.id):[]);

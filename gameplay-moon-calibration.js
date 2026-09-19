@@ -4,7 +4,6 @@
 // both shooters independent scoring routes and is held to the same monotonic
 // calibration gate as the Solo ladder.
 
-const baseDealPracticeRoundForCalibration=dealPracticeRound;
 dealPracticeRound=function(){
   state.practiceSuccess=false;
   const deck=shuffle(makeDeck());
