@@ -17,11 +17,12 @@
 
   const previousStartFirstTrick=startFirstTrick;
   startFirstTrick=function(){
-    previousStartFirstTrick();
-    if(state.phase!=='playing')return;
     const required=firstTwoClubsHolderLeftOfDealer();
-    if(state.leader!==required||state.currentPlayer!==required||state.trick.length!==0){
-      throw new Error('Opening leader invariant violated.');
+    previousStartFirstTrick();
+    if(state.phase==='playing'&&state.trickNumber===0&&state.trick.length===0){
+      if(state.leader!==required||state.currentPlayer!==required){
+        throw new Error('Opening leader invariant violated.');
+      }
     }
   };
 
