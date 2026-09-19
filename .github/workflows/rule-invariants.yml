@@ -4,9 +4,11 @@ on:
   pull_request:
     paths:
       - gameplay-rule-invariants.js
+      - gameplay-next-trick-flow.js
       - access-gate.js
       - docs/rule-invariants.md
       - scripts/verify-rule-invariants.mjs
+      - scripts/verify-next-trick-flow.mjs
       - scripts/verify-production-rule-loader.mjs
       - scripts/verify-me21-standard-game.mjs
       - scripts/verify-gameplay-simulation-qa.mjs
@@ -24,13 +26,17 @@ jobs:
       - name: Syntax check rule safety layer
         run: |
           node --input-type=module --check < gameplay-rule-invariants.js
+          node --input-type=module --check < gameplay-next-trick-flow.js
           node --input-type=module --check < access-gate.js
           node --input-type=module --check < scripts/verify-rule-invariants.mjs
+          node --input-type=module --check < scripts/verify-next-trick-flow.mjs
           node --input-type=module --check < scripts/verify-production-rule-loader.mjs
           node --input-type=module --check < scripts/verify-me21-standard-game.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
       - name: Verify seven canonical rule invariants
         run: node scripts/verify-rule-invariants.mjs
+      - name: Verify coach-aware next trick flow
+        run: node scripts/verify-next-trick-flow.mjs
       - name: Verify production loader is fail-closed
         run: node scripts/verify-production-rule-loader.mjs
       - name: Verify production browser Standard game
