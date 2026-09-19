@@ -10,4 +10,4 @@ These rules are hard engine constraints. UI, tutor, opponent policy, and simulat
 6. A player may never contribute more than one card to a trick.
 7. The opening trick may never contain a penalty-point card.
 
-Opening legality consequence: after all mandatory 2♣ plays, players follow clubs when able. A player void in clubs may discard only a diamond on the opening trick.
+Opening legality consequence: after all mandatory 2♣ plays, players follow clubs when able. A player void in clubs may discard only a diamond on the opening trick. If post-pass holdings leave any player with neither a club nor a diamond, the hand is invalid for these rules and is redealt before the opening trick begins.
