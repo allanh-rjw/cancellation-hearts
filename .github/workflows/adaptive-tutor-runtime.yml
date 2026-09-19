@@ -67,7 +67,6 @@ jobs:
             simulation/report.mjs
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
-            scripts/verify-final-trick-cancellation.mjs
             scripts/verify-standard-opponent-ai.mjs
             scripts/diagnose-standard-opponent-ai.mjs
             scripts/verify-gameplay-simulation.mjs
@@ -111,8 +110,6 @@ jobs:
         run: node scripts/verify-me21-ui-pivot.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Verify final-trick full-cancellation rule
-        run: node scripts/verify-final-trick-cancellation.mjs
       - name: Verify standard opponent decisions
         run: node scripts/verify-standard-opponent-ai.mjs
       - name: Verify deterministic opponent diagnostic harness

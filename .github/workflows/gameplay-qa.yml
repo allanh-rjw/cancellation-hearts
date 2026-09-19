@@ -9,9 +9,10 @@ on:
       - gameplay-moon-fixes.js
       - gameplay-moon-calibration.js
       - gameplay-next-trick-flow.js
+      - gameplay-rule-invariants.js
       - index.html
       - style.css
-      - scripts/verify-final-trick-cancellation.mjs
+      - scripts/verify-rule-invariants.mjs
       - scripts/verify-standard-opponent-ai.mjs
       - scripts/diagnose-standard-opponent-ai.mjs
       - scripts/diagnose-opponent-lookahead.mjs
@@ -40,7 +41,8 @@ jobs:
           node --input-type=module --check < gameplay-moon-fixes.js
           node --input-type=module --check < gameplay-moon-calibration.js
           node --input-type=module --check < gameplay-next-trick-flow.js
-          node --input-type=module --check < scripts/verify-final-trick-cancellation.mjs
+          node --input-type=module --check < gameplay-rule-invariants.js
+          node --input-type=module --check < scripts/verify-rule-invariants.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
@@ -51,8 +53,8 @@ jobs:
           node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
           node --input-type=module --check < scripts/verify-gameplay-simulation-fast-transitions.mjs
-      - name: Verify final-trick full-cancellation rule
-        run: node scripts/verify-final-trick-cancellation.mjs
+      - name: Verify canonical rule invariants (incl. final-trick full-cancellation split)
+        run: node scripts/verify-rule-invariants.mjs
       - name: Verify standard opponent decisions
         run: node scripts/verify-standard-opponent-ai.mjs
       - name: Verify deterministic opponent diagnostic harness
