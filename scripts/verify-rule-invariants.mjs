@@ -4,6 +4,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../gameplay-rule-invariants.js',import.meta.url),'utf8');
 const rulesNode={innerHTML:''};
 let finishRoundCalls=0;
+let beginRoundCalls=0;
 let baseFinishCalls=0;
 let basePlayCalls=0;
 let status='';
@@ -24,6 +25,7 @@ const context={
   },
   legalCards(playerIndex){return context.state.players[playerIndex].hand;},
   startFirstTrick(){throw new Error('base startFirstTrick should be replaced');},
+  beginRound(){beginRoundCalls++;},
   continueTurn(){},renderAll(){},renderTrickCoach(){},
   setStatus(value){status=value;},
   playCard(playerIndex,card){
@@ -50,14 +52,22 @@ const player=hand=>({name:'P',hand:[...hand],roundPoints:0,tricks:[]});
 const assert=(condition,message)=>{if(!condition)throw new Error(message);};
 
 // 1. First player clockwise from dealer holding 2C must lead.
-context.state={players:[player([]),player([c('C','2','2c-a')]),player([]),player([c('C','2','2c-b')])],dealer:0,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set()};
+context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a')]),player([c('D','4','d2')]),player([c('C','2','2c-b')])],dealer:0,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set()};
 context.startFirstTrick();
 assert(context.state.leader===1,'opening leader is not first 2C holder clockwise from dealer');
 assert(context.state.currentPlayer===1,'opening current player does not match required leader');
 assert(status.includes('must lead exactly one copy'),'opening status does not state forced 2C lead');
 
+// Impossible post-pass state must be redealt rather than violating opening rules.
+beginRoundCalls=0;
+context.state={players:[player([c('C','2','lead')]),player([c('S','8','s8'),c('H','4','h4')]),player([c('D','7','d7')])],dealer:2,trick:[],trickNumber:0,phase:'passing',currentPlayer:null,openingLeadSuit:null,openingAutoPlayers:new Set(),ruleRedealAttempts:0};
+context.startFirstTrick();
+assert(beginRoundCalls===1,'unplayable opening state was not rejected and redealt');
+assert(context.state.phase==='passing','unplayable opening state entered play');
+assert(status.includes('Redealing'),'unplayable opening did not explain the redeal');
+
 // 2, 3, 6. Double holder plays exactly one; all other holders are forced; nobody plays twice.
-context.state={players:[player([]),player([c('C','2','2c-a'),c('C','2','2c-b'),c('C','9','9c')]),player([c('C','2','2c-c'),c('D','5','5d')]),player([c('C','7','7c')])],dealer:0,trick:[],trickNumber:0,phase:'playing',leader:1,currentPlayer:1,openingLeadSuit:'C'};
+context.state={players:[player([c('D','3','d0')]),player([c('C','2','2c-a'),c('C','2','2c-b'),c('C','9','9c')]),player([c('C','2','2c-c'),c('D','5','5d')]),player([c('C','7','7c')])],dealer:0,trick:[],trickNumber:0,phase:'playing',leader:1,currentPlayer:1,openingLeadSuit:'C'};
 let legal=context.legalCards(1);
 assert(legal.length===2&&legal.every(card=>card.suit==='C'&&card.rank==='2'),'double 2C holder was not restricted to a 2C');
 context.playCard(1,legal[0]);
@@ -114,7 +124,8 @@ for(const phrase of [
   'Every other player holding a 2♣ must play exactly one when reached',
   'only one card to a trick',
   'may never contain a point card or any spade',
+  'hand is redealt before play begins',
   'highest-ranked canceling pair'
 ])assert(rulesNode.innerHTML.includes(phrase),`rules UI missing: ${phrase}`);
 
-console.log('rule-invariants: 7 canonical rules enforced in engine and UI');
+console.log('rule-invariants: 7 canonical rules plus unplayable-opening redeal enforced in engine and UI');
