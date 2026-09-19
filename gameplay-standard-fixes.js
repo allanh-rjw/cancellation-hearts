@@ -27,18 +27,9 @@ function gameplayAllHandsEmpty(){
   return state.players.every(p=>p.hand.length===0);
 }
 
-startFirstTrick=function(){
-  state.phase='playing';
-  state.trickNumber=0;
-  state.leader=firstTwoClubsHolderLeftOfDealer();
-  state.currentPlayer=state.leader;
-  state.trick=[];
-  state.openingAutoPlayers=new Set();
-  state.openingLeadSuit='C';
-  renderAll();
-  setStatus(`${state.players[state.leader].name} has the first 2♣ clockwise from the dealer and leads one copy.`);
-  continueTurn();
-};
+// startFirstTrick is not reassigned here: gameplay-rule-invariants.js is the
+// sole canonical authority for opening-trick leader resolution and always
+// loads after this file, unconditionally overwriting whatever was here.
 
 startTrick=function(){
   state.trick=[];

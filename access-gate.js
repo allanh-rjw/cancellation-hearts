@@ -1,4 +1,15 @@
 (async function installHeartsAccessGate(){
+  // Gameplay rule modules load as static <script> tags earlier in index.html
+  // and must already be installed by the time this synchronous prefix runs -
+  // access-gate.js is purely an access-verification concern and must never
+  // load or wait on gameplay code again (see the app-layer rebuild plan,
+  // Phase 1: this used to dynamically inject those scripts here, racing
+  // against learning-gateway-runtime.js's own async playCard wrapper).
+  if(!window.__cancellationHeartsRuleInvariants?.installed||
+     !window.__cancellationHeartsOpeningEnforcement?.installed||
+     !window.__cancellationHeartsNextTrickFlow?.installed){
+    throw new Error('access-gate.js loaded before gameplay rule modules installed - check index.html script order.');
+  }
   const CHECK_INTERVAL_MS=60*60_000;
   const STALE_AFTER_MS=60*60_000;
   const app=document.getElementById('app');
@@ -67,45 +78,6 @@
     document.getElementById('ulsAccessGate')?.remove();
   }
 
-  function loadRuleInvariants(){
-    if(window.__cancellationHeartsRuleInvariants?.installed)return Promise.resolve();
-    return new Promise((resolve,reject)=>{
-      const script=document.createElement('script');
-      script.src='gameplay-rule-invariants.js?v=20260918-rules1';
-      script.onload=()=>window.__cancellationHeartsRuleInvariants?.installed?resolve():reject(new Error('Gameplay rule invariants did not install.'));
-      script.onerror=()=>reject(new Error('Unable to load gameplay-rule-invariants.js'));
-      document.head.appendChild(script);
-    });
-  }
-
-  function loadOpeningEnforcement(){
-    if(window.__cancellationHeartsOpeningEnforcement?.installed)return Promise.resolve();
-    return new Promise((resolve,reject)=>{
-      const script=document.createElement('script');
-      script.src='gameplay-opening-enforcement.js?v=20260918-opening2';
-      script.onload=()=>window.__cancellationHeartsOpeningEnforcement?.installed?resolve():reject(new Error('Opening rule enforcement did not install.'));
-      script.onerror=()=>reject(new Error('Unable to load gameplay-opening-enforcement.js'));
-      document.head.appendChild(script);
-    });
-  }
-
-  function loadNextTrickFlow(){
-    if(window.__cancellationHeartsNextTrickFlow?.installed)return Promise.resolve();
-    return new Promise((resolve,reject)=>{
-      const script=document.createElement('script');
-      script.src='gameplay-next-trick-flow.js?v=20260918-nexttrick1';
-      script.onload=()=>window.__cancellationHeartsNextTrickFlow?.installed?resolve():reject(new Error('Next-trick flow did not install.'));
-      script.onerror=()=>reject(new Error('Unable to load gameplay-next-trick-flow.js'));
-      document.head.appendChild(script);
-    });
-  }
-
-  async function loadGameplayGuards(){
-    await loadRuleInvariants();
-    await loadOpeningEnforcement();
-    await loadNextTrickFlow();
-  }
-
   function accessFailure(error){
     return error?.code==='authorization-denied'||error?.code==='authentication-required';
   }
@@ -118,7 +90,6 @@
         const api=await import('./learning-gateway-client.mjs');
         const client=api.createLearningGatewayClient({baseUrl:configuredBaseUrl()});
         await client.preflight();
-        await loadGameplayGuards();
         hasAuthorizedSession=true;
         lastVerifiedAt=Date.now();
         unlock();
@@ -147,7 +118,6 @@
     lastVerifiedAt:()=>lastVerifiedAt
   });
   lock('checking');
-  await loadGameplayGuards();
   await verify({blocking:true});
   intervalId=setInterval(()=>{void verify();},CHECK_INTERVAL_MS);
   window.addEventListener('focus',verifyIfStale);
