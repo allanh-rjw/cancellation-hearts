@@ -532,17 +532,37 @@ function traceOpponentDecision(i,legal,ranked,chosen,reason,plan){
     selected:outcomes[chosen.id],shadow:outcomes[shadow.id],agreement:chosen.id===shadow.id,
     tieBreak:{reason,scoreGap:ranked.length>1?ranked[0].s-ranked[1].s:null,rankedCardIds:ranked.map(x=>x.c.id)}});
 }
+// Shared by app.js's own chooseAiCard and the belief-aware/lookahead layers
+// in gameplay-standard-fixes.js/gameplay-opponent-lookahead.js, which used
+// to each recompute this exact 8-term sum inline (a real, previously
+// undetected triplication - not the load-order kind Phase 1/2 fixed, but
+// the same "one canonical authority" principle applies). Each layer still
+// adds its own additional terms (belief-awareness, lookahead) on top of
+// this shared base; only the duplicated part moved.
+function standardCardScore(i,card,plan){
+  const player=state.players[i];
+  return evaluateCard(i,card,player.persona)+practiceDefenseAdjustment(i,card)+standardTacticalAdjustment(i,card)+opponentStrategyAdjustment(i,card,plan)+opponentPathwayAdjustment(i,card,plan)+futureHandScore(i,card)+scoreAwareAdjustment(i,card)+advancedInferenceAdjustment(i,card);
+}
+// Same reasoning: the blunder/close-score-noise selection over a ranked list
+// was also duplicated verbatim in all three chooseAiCard layers (only the
+// human-readable `reason` labels differed). Preserves the exact random()
+// call order/count of the original inline version: blunder is checked (and
+// only consumes a random() call) before noise, which is itself only reached
+// if blunder didn't trigger - callers relying on seeded determinism
+// (scripts/diagnose-standard-opponent-ai.mjs) depend on this staying exact.
+function pickByDifficulty(ranked,profile,reasons){
+  if(profile.blunder&&Math.random()<profile.blunder)return {chosen:ranked[Math.min(1,ranked.length-1)].c,reason:reasons.blunder};
+  if(ranked.length>1&&ranked[0].s-ranked[1].s<profile.noise&&Math.random()<.22)return {chosen:ranked[1].c,reason:reasons.noise};
+  return {chosen:ranked[0].c,reason:reasons.top};
+}
 function chooseAiCard(i){
-  const legal=legalCards(i), p=state.players[i], prof=difficultyProfile();
+  const legal=legalCards(i), prof=difficultyProfile();
   const plan=opponentStrategyPlan(i);
-  const ranked=legal.map(c=>({c,s:evaluateCard(i,c,p.persona)+practiceDefenseAdjustment(i,c)+standardTacticalAdjustment(i,c)+opponentStrategyAdjustment(i,c,plan)+opponentPathwayAdjustment(i,c,plan)+futureHandScore(i,c)+scoreAwareAdjustment(i,c)+advancedInferenceAdjustment(i,c)})).sort((a,b)=>b.s-a.s);
+  const ranked=legal.map(c=>({c,s:standardCardScore(i,c,plan)})).sort((a,b)=>b.s-a.s);
   const threat=practiceThreatState();
-  let chosen,reason='top-ranked';
+  let chosen,reason;
   if(state.difficulty==='easy' && !threat.credible){chosen=legal[Math.floor(Math.random()*legal.length)];reason='easy-random';}
-  else if(prof.blunder&&Math.random()<prof.blunder){chosen=ranked[Math.min(1,ranked.length-1)].c;reason='difficulty-blunder';}
-  // Only randomize among genuinely close plays; Expert is almost deterministic.
-  else if(ranked.length>1 && ranked[0].s-ranked[1].s<prof.noise && Math.random()<.22){chosen=ranked[1].c;reason='close-score-noise';}
-  else chosen=ranked[0].c;
+  else ({chosen,reason}=pickByDifficulty(ranked,prof,{blunder:'difficulty-blunder',noise:'close-score-noise',top:'top-ranked'}));
   traceOpponentDecision(i,legal,ranked,chosen,reason,plan);
   return chosen;
 }

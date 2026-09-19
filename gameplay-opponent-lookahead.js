@@ -133,17 +133,14 @@ window.__opponentLookahead=opponentLookaheadControl;
 
 chooseAiCard=function(i){
   if(!opponentLookaheadControl.enabled||state.mode!=='standard'||opponentLookaheadDepth()===0)return opponentLookaheadBaseChooseAiCard(i);
-  const legal=legalCards(i),player=state.players[i],profile=difficultyProfile(),plan=opponentStrategyPlan(i),belief=beliefAwareObservedState(i);
+  const legal=legalCards(i),profile=difficultyProfile(),plan=opponentStrategyPlan(i),belief=beliefAwareObservedState(i);
   const ranked=legal.map(card=>{
-    const base=evaluateCard(i,card,player.persona)+practiceDefenseAdjustment(i,card)+standardTacticalAdjustment(i,card)+opponentStrategyAdjustment(i,card,plan)+opponentPathwayAdjustment(i,card,plan)+futureHandScore(i,card)+scoreAwareAdjustment(i,card)+advancedInferenceAdjustment(i,card);
+    const base=standardCardScore(i,card,plan);
     const beliefScore=beliefAwareDecisionAdjustment(i,card,belief);
     const lookahead=opponentLookaheadDecision(i,card,belief,plan);
     return {c:card,s:base+beliefScore+lookahead.score,base,belief:beliefScore,lookahead:lookahead.score,discipline:lookahead.discipline??0,nextLead:lookahead.nextLead,retainControl:lookahead.retainControl};
   }).sort((a,b)=>b.s-a.s);
-  let chosen,reason='lookahead-top-ranked';
-  if(profile.blunder&&Math.random()<profile.blunder){chosen=ranked[Math.min(1,ranked.length-1)].c;reason='lookahead-difficulty-blunder';}
-  else if(ranked.length>1&&ranked[0].s-ranked[1].s<profile.noise&&Math.random()<.22){chosen=ranked[1].c;reason='lookahead-close-score-noise';}
-  else chosen=ranked[0].c;
+  const {chosen,reason}=pickByDifficulty(ranked,profile,{blunder:'lookahead-difficulty-blunder',noise:'lookahead-close-score-noise',top:'lookahead-top-ranked'});
   const decision={seat:i,reason,chosen:chosen.id,depth:opponentLookaheadDepth(),ranked:ranked.map(x=>({id:x.c.id,base:x.base,belief:x.belief,lookahead:x.lookahead,discipline:x.discipline,total:x.s,nextLead:x.nextLead,retainControl:x.retainControl}))};
   opponentLookaheadControl.lastDecision=decision;
   beliefAwareControl.lastDecision=decision;
