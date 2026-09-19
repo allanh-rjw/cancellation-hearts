@@ -22,6 +22,12 @@ const state = {
   phase: 'idle', selected: new Set(), passOffset: 1, gameOver: false, coachStrategy: null,
   coachWeights:{board:33,score:33,strategy:34}, actionLog:[], humanDecisionLog:[], roundStartMetrics:null, lastPostAnalysis:null, playSpeed:1, scoreHistory:[], showPersonas:false, currentTrickAward:null, audioContext:null, mode:'standard', practiceType:'solo', practiceStrength:'strong', partnerIndex:null, practiceEnded:false, carryoverPoints:0, carryoverCards:[], originalStrategy:null, strategyPivots:[], pendingPivot:null, openingAutoPlayers:new Set(), openingLeadSuit:null, opponentHistory:{}, opponentPlans:{}, opponentDiagnostics:null, learningProfile:null, handAnalysisHistory:[], currentHandPathway:null
 };
+// state is `const`, so unlike a `function`/`var` declaration it is NOT an
+// implicit window property - ES modules (learning-gateway-runtime.js,
+// access-gate.js) can only see it via this explicit publish. The object
+// reference is never reassigned, only mutated, so this stays valid for the
+// lifetime of the page.
+window.state=state;
 
 
 function loadLearningProfile(){
@@ -36,6 +42,9 @@ function saveLearningProfile(){
 state.learningProfile=loadLearningProfile();
 
 const $ = id => document.getElementById(id);
+// Same reasoning as window.state above: $ is `const`, so it needs an
+// explicit publish for learning-gateway-runtime.js to use it as a module.
+window.$=$;
 
 $('newGameBtn').onclick = startGame;
 $('startOverBtn').onclick = ()=>window.location.reload();
@@ -926,6 +935,10 @@ function setStatus(t){ $('status').textContent=t; }
 
 
 const STRATEGY_LABELS={avoidance:'Avoidance',targeting:'Targeting',cancellation:'Cancellation-oriented',soloMoon:'Solo moon',twoMoon:'Two-player moon'};
+// Same reasoning as window.state above: STRATEGY_LABELS is `const`, so it
+// needs an explicit publish for learning-gateway-runtime.js to use it as a
+// module.
+window.STRATEGY_LABELS=STRATEGY_LABELS;
 function suitName(s){return {C:'clubs',D:'diamonds',S:'spades',H:'hearts'}[s];}
 function humanHandMetrics(playerIndex=0){
   const hand=state.players[playerIndex]?.hand||[];

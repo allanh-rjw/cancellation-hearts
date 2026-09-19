@@ -404,8 +404,18 @@
     <script src="gameplay-rule-invariants.js?v=20260919-static1"></script>
     <script src="gameplay-opening-enforcement.js?v=20260919-static1"></script>
     <script src="gameplay-next-trick-flow.js?v=20260919-static1"></script>
-    <script src="learning-gateway-runtime.js?v=20260910-gateway1"></script>
-    <script src="access-gate.js?v=20260919-static1"></script>
+    <!--
+      Real ES modules (static import instead of a dynamic await import()) so
+      the browser resolves their dependency graph deterministically before
+      running their top-level code - no async gap left for a click or another
+      script to race against. See the app-layer rebuild plan: this closes the
+      last concrete hazard the wrap-chain audit found. app.js and the
+      gameplay-*.js files stay classic scripts (already race-free after the
+      earlier named-engine refactor); modularizing them too was evaluated and
+      declined as pure architectural cleanup with no further safety benefit.
+    -->
+    <script type="module" src="learning-gateway-runtime.js?v=20260919-module1"></script>
+    <script type="module" src="access-gate.js?v=20260919-module1"></script>
     <script src="causal-loader.js?v=20260910-gateway1"></script>
   </body>
 </html>

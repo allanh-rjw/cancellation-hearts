@@ -1,3 +1,5 @@
+import {createLearningGatewayClient} from './learning-gateway-client.mjs';
+
 (async function installHeartsAccessGate(){
   // Gameplay rule modules load as static <script> tags earlier in index.html
   // and must already be installed by the time this synchronous prefix runs -
@@ -87,8 +89,7 @@
     checking=(async()=>{
       if(blocking||!hasAuthorizedSession)lock('checking');
       try{
-        const api=await import('./learning-gateway-client.mjs');
-        const client=api.createLearningGatewayClient({baseUrl:configuredBaseUrl()});
+        const client=createLearningGatewayClient({baseUrl:configuredBaseUrl()});
         await client.preflight();
         hasAuthorizedSession=true;
         lastVerifiedAt=Date.now();
