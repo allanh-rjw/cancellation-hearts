@@ -2,13 +2,15 @@ import {readFileSync} from 'node:fs';
 
 const access=readFileSync(new URL('../access-gate.js',import.meta.url),'utf8');
 const rules=readFileSync(new URL('../gameplay-rule-invariants.js',import.meta.url),'utf8');
+const opening=readFileSync(new URL('../gameplay-opening-enforcement.js',import.meta.url),'utf8');
 const nextTrick=readFileSync(new URL('../gameplay-next-trick-flow.js',import.meta.url),'utf8');
 
 function assert(ok,message){if(!ok)throw new Error(message);}
 
 assert(access.includes("gameplay-rule-invariants.js?v=20260918-rules1"),'access gate no longer loads canonical rule invariant layer');
+assert(access.includes("gameplay-opening-enforcement.js?v=20260918-opening2"),'access gate no longer loads final opening enforcement layer');
 assert(access.includes("gameplay-next-trick-flow.js?v=20260918-nexttrick1"),'access gate no longer loads next-trick flow layer');
-assert(access.includes("await loadRuleInvariants();\n    await loadNextTrickFlow();"),'gameplay guards do not load in the required order');
+assert(access.includes("await loadRuleInvariants();\n    await loadOpeningEnforcement();\n    await loadNextTrickFlow();"),'gameplay guards do not load in the required order');
 const initialGuardLoad=access.lastIndexOf('await loadGameplayGuards();');
 const initialVerify=access.lastIndexOf('await verify({blocking:true});');
 assert(initialGuardLoad>=0&&initialVerify>initialGuardLoad,'app can unlock before gameplay guards load');
@@ -32,6 +34,15 @@ for(const signature of [
 ])assert(rules.includes(signature),`canonical rule guard missing: ${signature}`);
 
 for(const signature of [
+  "const canonical=window.__cancellationHeartsRuleInvariants;",
+  "if(state.trickNumber===0)return canonicalLegalCards(playerIndex);",
+  "const required=firstTwoClubsHolderLeftOfDealer();",
+  "if(state.leader!==required||state.currentPlayer!==required||state.trick.length!==0)",
+  "const legal=canonicalLegalCards(playerIndex);",
+  "if(!card||!legal.some(candidate=>candidate.id===card.id))return;"
+])assert(opening.includes(signature),`final opening enforcement missing: ${signature}`);
+
+for(const signature of [
   'const AUTO_ADVANCE_MS=3000;',
   "const coachOpen=()=>!coachPanel.classList.contains('hidden');",
   "if(coachOpen())showManualAdvance();",
@@ -41,4 +52,4 @@ for(const signature of [
 
 assert(!rules.includes("if(isPointCard(card)||card.suit==='S')return;"),'obsolete all-spades opening prohibition is still present');
 
-console.log('production-rule-loader: gameplay guards load before initial access unlock; hourly silent revalidation remains fail-closed on real access loss');
+console.log('production-rule-loader: canonical rules plus final opening enforcement load before unlock; hourly silent revalidation remains fail-closed on real access loss');
