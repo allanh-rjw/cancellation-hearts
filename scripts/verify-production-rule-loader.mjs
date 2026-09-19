@@ -10,7 +10,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function assert(ok,message){if(!ok)throw new Error(message);}
 
 function scriptOrder(source){
-  return [...source.matchAll(/<script src="([^"?]+)/g)].map(m=>m[1]);
+  return [...source.matchAll(/<script(?:\s+type="module")?\s+src="([^"?]+)/g)].map(m=>m[1]);
 }
 
 // The opening/legality/final-trick canonical authority and the coach-aware

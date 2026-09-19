@@ -79,6 +79,7 @@ jobs:
             scripts/verify-me21-ui-pivot.mjs
             scripts/run-me21-canonical-campaign.mjs
             scripts/verify-access-gate.mjs
+            scripts/verify-gateway-module-loading.mjs
           )
           for file in "${files[@]}"; do
             node --input-type=module --check < "$file"
@@ -94,6 +95,8 @@ jobs:
         run: node scripts/verify-learning-gateway-parity.mjs
       - name: Verify revoked learner fails closed and active learner unlocks
         run: node scripts/verify-access-gate.mjs
+      - name: Verify gateway/access-gate module loading and gameplay scope boundary
+        run: node scripts/verify-gateway-module-loading.mjs
       - name: Verify Gateway-default and parity browser dispatch
         run: node scripts/verify-parity-dispatch.mjs
       - name: Verify Gateway-default browser startup, rollback modes, and lazy Tutor initialization

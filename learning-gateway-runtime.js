@@ -1,5 +1,15 @@
+import * as api from './learning-gateway-client.mjs';
+
+// This module reads several classic-script globals via explicit window.X
+// instead of bare identifiers: app.js and the gameplay-*.js files are not
+// modules, so their top-level bindings aren't visible here through normal
+// module scoping. Functions declared with `function` at the top level of
+// those classic scripts are real window properties (and stay current as
+// gameplay-rule-invariants.js etc. reassign them); state/$/STRATEGY_LABELS
+// are `const` in app.js, so it explicitly publishes those three itself.
+const {state,$,legalCards,humanHandMetrics,recommendedStrategy,rejectedStrategyDetails,passCardScoreForStrategy,rankHumanLegalCards,strategyViability,currentMoonThreat,inferOpponent,STRATEGY_LABELS}=window;
+
 (async function installLearningGatewayRuntime(){
-  const api=await import('./learning-gateway-client.mjs');
   const STORAGE_KEY='cancellationHearts.learningGateway.mode';
   const DEFAULT_MODE='gateway';
   const allowed=new Set(['legacy','gateway','parity']);
