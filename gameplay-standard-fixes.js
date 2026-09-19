@@ -362,16 +362,13 @@ window.__opponentBeliefAware=beliefAwareControl;
 
 chooseAiCard=function(i){
   if(state.mode!=='standard'||state.difficulty==='easy'||!beliefAwareControl.enabled)return beliefAwareBaseChooseAiCard(i);
-  const legal=legalCards(i),player=state.players[i],profile=difficultyProfile(),plan=opponentStrategyPlan(i),belief=beliefAwareObservedState(i);
+  const legal=legalCards(i),profile=difficultyProfile(),plan=opponentStrategyPlan(i),belief=beliefAwareObservedState(i);
   const ranked=legal.map(card=>{
-    const base=evaluateCard(i,card,player.persona)+practiceDefenseAdjustment(i,card)+standardTacticalAdjustment(i,card)+opponentStrategyAdjustment(i,card,plan)+opponentPathwayAdjustment(i,card,plan)+futureHandScore(i,card)+scoreAwareAdjustment(i,card)+advancedInferenceAdjustment(i,card);
+    const base=standardCardScore(i,card,plan);
     const beliefScore=beliefAwareDecisionAdjustment(i,card,belief);
     return {c:card,s:base+beliefScore,base,belief:beliefScore};
   }).sort((a,b)=>b.s-a.s);
-  let chosen,reason='belief-top-ranked';
-  if(profile.blunder&&Math.random()<profile.blunder){chosen=ranked[Math.min(1,ranked.length-1)].c;reason='belief-difficulty-blunder';}
-  else if(ranked.length>1&&ranked[0].s-ranked[1].s<profile.noise&&Math.random()<.22){chosen=ranked[1].c;reason='belief-close-score-noise';}
-  else chosen=ranked[0].c;
+  const {chosen,reason}=pickByDifficulty(ranked,profile,{blunder:'belief-difficulty-blunder',noise:'belief-close-score-noise',top:'belief-top-ranked'});
   beliefAwareControl.lastDecision={seat:i,reason,chosen:chosen.id,ranked:ranked.map(x=>({id:x.c.id,base:x.base,belief:x.belief,total:x.s}))};
   traceOpponentDecision(i,legal,ranked,chosen,reason,plan);
   return chosen;

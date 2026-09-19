@@ -46,6 +46,8 @@ vm.runInContext([
   declaration('standardMoonThreat'),
   declaration('opponentDecisionOutcome'),
   declaration('traceOpponentDecision'),
+  declaration('standardCardScore'),
+  declaration('pickByDifficulty'),
   declaration('chooseAiCard')
 ].join('\n'),context);
 

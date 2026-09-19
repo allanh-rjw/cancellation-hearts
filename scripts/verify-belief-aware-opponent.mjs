@@ -36,6 +36,19 @@ const context={
   evaluateCard:()=>0,practiceDefenseAdjustment:()=>0,standardTacticalAdjustment:()=>0,
   opponentStrategyAdjustment:()=>0,opponentPathwayAdjustment:()=>0,futureHandScore:()=>0,
   scoreAwareAdjustment:()=>0,advancedInferenceAdjustment:()=>0,traceOpponentDecision:()=>{},
+  // Real app.js implementation this test doesn't extract (it's outside the
+  // marked policy block); mirrors it exactly using this same context's
+  // already-stubbed adjustment functions, so it's testing the real
+  // composition, not a shortcut.
+  standardCardScore(i,card,plan){
+    const player=state.players[i];
+    return context.evaluateCard(i,card,player.persona)+context.practiceDefenseAdjustment(i,card)+context.standardTacticalAdjustment(i,card)+context.opponentStrategyAdjustment(i,card,plan)+context.opponentPathwayAdjustment(i,card,plan)+context.futureHandScore(i,card)+context.scoreAwareAdjustment(i,card)+context.advancedInferenceAdjustment(i,card);
+  },
+  pickByDifficulty(ranked,profile,reasons){
+    if(profile.blunder&&Math.random()<profile.blunder)return {chosen:ranked[Math.min(1,ranked.length-1)].c,reason:reasons.blunder};
+    if(ranked.length>1&&ranked[0].s-ranked[1].s<profile.noise&&Math.random()<.22)return {chosen:ranked[1].c,reason:reasons.noise};
+    return {chosen:ranked[0].c,reason:reasons.top};
+  },
   cardPoints:c=>c.suit==='H'?1:(c.suit==='S'&&c.rank==='Q'?13:0),Math,Map,Set,Object,Array,Number
 };
 vm.createContext(context);
