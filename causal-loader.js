@@ -5,9 +5,21 @@
   function loadScript(src){
     return new Promise((resolve,reject)=>{
       const s=document.createElement('script');
+      // async=false makes a dynamically-created script fetch in parallel with
+      // other scripts while still executing in the order it was inserted -
+      // the standard technique for "download concurrently, run in order".
+      s.async=false;
       s.src=src; s.onload=resolve; s.onerror=()=>reject(new Error(`Unable to load ${src}`));
       document.head.appendChild(s);
     });
+  }
+  // Inserts every script tag immediately (so all of them start downloading
+  // at once) and resolves once every one has executed, in the order given -
+  // required for chains like the hearts-*.js grading wrappers, where each
+  // file re-binds whatever window.CancellationHeartsTutorAdapter.evaluate
+  // currently is and only makes sense if the previous wrapper already ran.
+  function loadScriptsInOrder(paths){
+    return Promise.all(paths.map(loadScript));
   }
   function loadStyle(href){
     if(document.querySelector(`link[href="${href}"]`)) return;
@@ -48,24 +60,36 @@
     loadStyle('tutor-rating.css');
     loadStyle('tutor-passing.css');
     loadStyle('tutor-diagnostic.css');
-    await loadScript('hearts-tutor-adapter.js');
-    await loadScript('hearts-feedback-diagnosis.js');
-    await loadScript('hearts-pathway-consistency.js');
-    await loadScript('hearts-response-completeness.js');
-    await loadScript('hearts-reasoning-evidence.js');
-    await loadScript('hearts-advanced-reasoning.js');
-    await loadScript('hearts-passing-reasoning.js');
-    await import('./adaptive-trainer/hearts-browser-integration.js');
-    await import('./adaptive-trainer/student-profile-rubric.js');
-    await import('./adaptive-trainer/hearts-assessment-integration.js');
-    await import('./adaptive-trainer/hearts-calibration-integration.js');
-    await loadScript('tutor-passing-phase.js');
-    await loadScript('tutor-diagnostic.js');
+    // These four groups don't depend on each other - only hearts-tutor.js
+    // (loaded after this) needs all of them done. Previously they were
+    // awaited one at a time, so ~14 file loads were fully serialized; in
+    // production, where every request crosses Cloudflare Access and the
+    // entitlement gateway, that added up to real, user-visible delay before
+    // Tutor mode appeared. Running the groups concurrently collapses that to
+    // roughly one round trip's worth of latency instead of fourteen.
     await Promise.all([
-      registerTutorExtension('strategy-orientation','tutor-strategy-orientation.js'),
-      registerTutorExtension('situational-coaching','tutor-situational-coaching.js'),
-      registerTutorExtension('level-progression','tutor-level-progression.js'),
-      registerTutorExtension('progress-tab','tutor-progress-tab.js')
+      loadScriptsInOrder([
+        'hearts-tutor-adapter.js',
+        'hearts-feedback-diagnosis.js',
+        'hearts-pathway-consistency.js',
+        'hearts-response-completeness.js',
+        'hearts-reasoning-evidence.js',
+        'hearts-advanced-reasoning.js',
+        'hearts-passing-reasoning.js'
+      ]),
+      Promise.all([
+        import('./adaptive-trainer/hearts-browser-integration.js'),
+        import('./adaptive-trainer/student-profile-rubric.js'),
+        import('./adaptive-trainer/hearts-assessment-integration.js'),
+        import('./adaptive-trainer/hearts-calibration-integration.js')
+      ]),
+      loadScriptsInOrder(['tutor-passing-phase.js','tutor-diagnostic.js']),
+      Promise.all([
+        registerTutorExtension('strategy-orientation','tutor-strategy-orientation.js'),
+        registerTutorExtension('situational-coaching','tutor-situational-coaching.js'),
+        registerTutorExtension('level-progression','tutor-level-progression.js'),
+        registerTutorExtension('progress-tab','tutor-progress-tab.js')
+      ])
     ]);
     await loadScript('hearts-tutor.js');
     window.__adaptiveTutorLoaded=true;
