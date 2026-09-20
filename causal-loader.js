@@ -1,4 +1,10 @@
-(async function loadAdaptiveTutorStack(){
+// access-gate.js awaits this once, before its first unlock(), so the app
+// reveals with every game-mode option (including Tutor, or its disabled
+// fallback) already in place instead of Tutor mode popping in after the
+// rest of the UI is already interactive. The try/catch below never rethrows,
+// so this always resolves (never rejects) once the stack has settled either
+// way. See the app-layer rebuild plan, Phase 6.
+window.__adaptiveTutorSettled=(async function loadAdaptiveTutorStack(){
   const tutorExtensionSources=new Map();
   const installedTutorExtensions=new Set();
 
