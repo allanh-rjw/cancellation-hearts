@@ -68,8 +68,6 @@ jobs:
             simulation/report.mjs
             simulation/cli.mjs
             scripts/verify-tutor-simulation.mjs
-            scripts/verify-standard-opponent-ai.mjs
-            scripts/diagnose-standard-opponent-ai.mjs
             scripts/verify-gameplay-simulation.mjs
             scripts/verify-gameplay-simulation-qa.mjs
             scripts/verify-gameplay-simulation-fast-transitions.mjs
@@ -114,10 +112,14 @@ jobs:
         run: node scripts/verify-me21-ui-pivot.mjs
       - name: Verify simulated learner Tutor behavior
         run: node scripts/verify-tutor-simulation.mjs
-      - name: Verify standard opponent decisions
-        run: node scripts/verify-standard-opponent-ai.mjs
-      - name: Verify deterministic opponent diagnostic harness
-        run: node scripts/diagnose-standard-opponent-ai.mjs --verify
+      # verify-standard-opponent-ai.mjs and diagnose-standard-opponent-ai.mjs
+      # --verify run in gameplay-qa.yml, which already both syntax-checks and
+      # runs them - running them here too only duplicated the same check
+      # against the same inputs. See the app-layer rebuild plan, Phase 5.
       - name: Run deterministic standard and moon-practice gameplay simulations
-        # This is the cross-product regression gate after Tutor validation. UI pacing is verified separately.
+        # This is the cross-product regression gate after Tutor validation. UI
+        # pacing is verified separately. This workflow has no path filter and
+        # always runs on every PR/push to main, so this is the sole place this
+        # full-simulation final gate runs (rule-invariants.yml and
+        # gameplay-qa.yml used to duplicate it - see Phase 5).
         run: node scripts/verify-gameplay-simulation-fast-transitions.mjs
