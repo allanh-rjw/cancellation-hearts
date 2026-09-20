@@ -20,6 +20,26 @@ import {createLearningGatewayClient} from './learning-gateway-client.mjs';
   let intervalId=null;
   let lastVerifiedAt=0;
   let hasAuthorizedSession=false;
+  let tutorGateAwaited=false;
+
+  // Waited once, only before the very first unlock(), so the app reveals
+  // with every game-mode option already settled (Tutor mode, or its
+  // disabled fallback) instead of it popping in after the rest of the UI is
+  // already interactive. causal-loader.js is a classic <script> placed after
+  // this module tag in index.html, but classic scripts always execute before
+  // any deferred/module script regardless of document position, so
+  // window.__adaptiveTutorSettled is already assigned a Promise by the time
+  // this module's top-level code runs. Capped so a stuck Tutor load can never
+  // block the rest of the game from becoming playable. See Phase 6.
+  async function awaitTutorSettleOnce(){
+    if(tutorGateAwaited)return;
+    tutorGateAwaited=true;
+    const settled=window.__adaptiveTutorSettled;
+    await Promise.race([
+      settled instanceof Promise?settled:Promise.resolve(),
+      new Promise(resolve=>setTimeout(resolve,10000))
+    ]);
+  }
 
   function configuredBaseUrl(){
     const explicit=typeof window.CANCELLATION_HEARTS_GATEWAY_BASE_URL==='string'?window.CANCELLATION_HEARTS_GATEWAY_BASE_URL.trim():'';
@@ -93,6 +113,7 @@ import {createLearningGatewayClient} from './learning-gateway-client.mjs';
         await client.preflight();
         hasAuthorizedSession=true;
         lastVerifiedAt=Date.now();
+        await awaitTutorSettleOnce();
         unlock();
         return true;
       }catch(error){

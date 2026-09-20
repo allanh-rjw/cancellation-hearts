@@ -73,7 +73,9 @@ try{
 
   // Now wait for real access verification and gameplay module installation to
   // complete (the legitimate, unlocked path), then click for real.
-  await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'&&window.__cancellationHeartsRuleInvariants?.installed===true&&window.__cancellationHeartsOpeningEnforcement?.installed===true`,'unlock + canonical rules installed');
+  // unlock() now also waits for causal-loader.js's Tutor stack to settle
+  // (Phase 6), so this needs the same margin as the tutor-specific waits.
+  await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'&&window.__cancellationHeartsRuleInvariants?.installed===true&&window.__cancellationHeartsOpeningEnforcement?.installed===true`,'unlock + canonical rules installed',{tries:150});
   const inertAfterUnlock=await evaluate(`document.getElementById('app').inert`);
   assert(inertAfterUnlock===false,'app must no longer be inert once access unlocks');
   await evaluate(`document.getElementById('newGameBtn').click()`);
