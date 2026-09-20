@@ -38,9 +38,6 @@ jobs:
           node --input-type=module --check < scripts/verify-next-trick-flow.mjs
           node --input-type=module --check < scripts/verify-production-rule-loader.mjs
           node --input-type=module --check < scripts/verify-early-interaction-lock.mjs
-          node --input-type=module --check < scripts/verify-me21-standard-game.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation-fast-transitions.mjs
       - name: Verify canonical rule invariants and 512-state opening campaign
         run: node scripts/verify-rule-invariants.mjs
       - name: Verify coach-aware next trick flow
@@ -49,7 +46,7 @@ jobs:
         run: node scripts/verify-production-rule-loader.mjs
       - name: Verify earliest-possible interaction is blocked until access unlocks
         run: node scripts/verify-early-interaction-lock.mjs
-      - name: Verify production browser Standard game
-        run: node scripts/verify-me21-standard-game.mjs
-      - name: Run Standard and Shoot-the-Moon simulations
-        run: node scripts/verify-gameplay-simulation-fast-transitions.mjs
+      # verify-me21-standard-game.mjs and verify-gameplay-simulation-fast-transitions.mjs
+      # run in adaptive-tutor-runtime.yml, which has no path filter and always
+      # runs on every PR - running them here too only duplicated the same
+      # check against the same inputs. See the app-layer rebuild plan, Phase 5.

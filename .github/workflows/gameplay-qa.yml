@@ -42,7 +42,6 @@ jobs:
           node --input-type=module --check < gameplay-moon-calibration.js
           node --input-type=module --check < gameplay-next-trick-flow.js
           node --input-type=module --check < gameplay-rule-invariants.js
-          node --input-type=module --check < scripts/verify-rule-invariants.mjs
           node --input-type=module --check < scripts/verify-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-standard-opponent-ai.mjs
           node --input-type=module --check < scripts/diagnose-opponent-lookahead.mjs
@@ -50,11 +49,12 @@ jobs:
           node --input-type=module --check < scripts/verify-opponent-belief-state.mjs
           node --input-type=module --check < scripts/verify-belief-aware-opponent.mjs
           node --input-type=module --check < scripts/verify-opponent-lookahead.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation-qa.mjs
-          node --input-type=module --check < scripts/verify-gameplay-simulation-fast-transitions.mjs
-      - name: Verify canonical rule invariants (incl. final-trick full-cancellation split)
-        run: node scripts/verify-rule-invariants.mjs
+      # verify-rule-invariants.mjs runs in rule-invariants.yml, and
+      # verify-gameplay-simulation-fast-transitions.mjs (the full-simulation
+      # final gate) runs in adaptive-tutor-runtime.yml, which has no path
+      # filter and always runs on every PR - running either here too only
+      # duplicated the same check against the same inputs. See the app-layer
+      # rebuild plan, Phase 5.
       - name: Verify standard opponent decisions
         run: node scripts/verify-standard-opponent-ai.mjs
       - name: Verify deterministic opponent diagnostic harness
@@ -67,6 +67,3 @@ jobs:
         run: node scripts/verify-opponent-lookahead.mjs
       - name: Compare Prompt 3 and Prompt 4 on paired deals
         run: node scripts/diagnose-opponent-lookahead.mjs
-      - name: Run standard and Shoot-the-Moon gameplay simulations
-        # Final gate: canonical final-trick rule, monotonic Practice calibration, and unchanged Standard regression.
-        run: node scripts/verify-gameplay-simulation-fast-transitions.mjs
