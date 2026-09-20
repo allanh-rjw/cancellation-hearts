@@ -1,4 +1,4 @@
-(async function loadCausalPlanner(){
+(async function loadAdaptiveTutorStack(){
   const tutorExtensionSources=new Map();
   const installedTutorExtensions=new Set();
 
@@ -28,61 +28,20 @@
   }
   window.__CancellationHeartsTutorExtensions=Object.freeze({install:installTutorExtensions,registered:()=>[...tutorExtensionSources.keys()],installed:()=>[...installedTutorExtensions]});
 
-  async function loadAsyncTutorUI(){
-    const response=await fetch('hearts-tutor.js',{cache:'no-store'});
-    if(!response.ok) throw new Error('Unable to load hearts-tutor.js');
-    let code=await response.text();
-    const originalCore="const core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);";
-    const lazyCore="let core=null;let coreConstructionCount=0;function ensureInitialized(){if(core)return core;core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);coreConstructionCount++;window.__CancellationHeartsTutorExtensions?.install?.();return core;}";
-    if(!code.includes(originalCore)) throw new Error('Tutor lazy-core integration guard failed: core signature changed');
-    code=code.replace(originalCore,lazyCore);
-    const originalStartFunction="function startTutor(){";
-    const lazyStartFunction="function startTutor(){ensureInitialized();";
-    if(!code.includes(originalStartFunction)) throw new Error('Tutor lazy-core integration guard failed: startTutor signature changed');
-    code=code.replace(originalStartFunction,lazyStartFunction);
-    const originalSteps="const steps=[\n    {id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}\n  ];";
-    const replacementSteps="const baseSteps=[{id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}]; const developingSteps=[{id:'threat',label:'6. Threats'},{id:'pivot',label:'7. Contingency / pivot'}]; const advancedSteps=[{id:'observe',label:'8. What to watch for'},{id:'target',label:'9. Smart targeting'}]; let steps=[...baseSteps]; function stepsForLevel(){const level=core.profile.selfLevel||'beginner';if(level==='developing')return [...baseSteps,...developingSteps];if(level==='advanced'||level==='expert')return [...baseSteps,...developingSteps,...advancedSteps];return [...baseSteps];}";
-    if(!code.includes(originalSteps)) throw new Error('Tutor ME20 integration guard failed: steps signature changed');
-    code=code.replace(originalSteps,replacementSteps);
-    const originalStart="if(!core.profile.selfLevel)renderSelfAssessment();else beginExercise();";
-    const replacementStart="if(!core.state.diagnostic?.completed){const diagnostic=window.CancellationHeartsDiagnostic;if(!diagnostic)throw new Error('Opening diagnostic is not loaded');diagnostic.start({core,beginExercise});}else beginExercise();";
-    if(!code.includes(originalStart)) throw new Error('Tutor diagnostic integration guard failed: startTutor signature changed');
-    code=code.replace(originalStart,replacementStart);
-    const originalBegin="function beginExercise(){exercise=core.selectExercise();stepIndex=0;answers={};walkthroughIndex=0;renderExerciseIntro();window.scrollTo({top:0,behavior:'instant'});}";
-    const replacementBegin="function beginExercise(){exercise=core.selectExercise();steps=stepsForLevel();stepIndex=0;answers={};walkthroughIndex=0;const finish=(updated)=>{if(updated)exercise=updated;renderExerciseIntro();window.scrollTo({top:0,behavior:'instant'});};const passing=window.CancellationHeartsPassingPhase;if(passing?.shouldRun(core.profile,exercise)){passing.start({core,exercise,onComplete:finish});return;}finish(exercise);}";
-    if(!code.includes(originalBegin)) throw new Error('Tutor ME20 passing integration guard failed: beginExercise signature changed');
-    code=code.replace(originalBegin,replacementBegin);
-    const originalSubmit="function submitStep(response){const step=steps[stepIndex];if(!(response.text||response.choice)){document.getElementById('tutorAnswer')?.focus();return;}const result=core.evaluate(step,response,{exercise,answers});answers[step.id]=response.text||response.choice;renderFeedback(step,result,response);}";
-    const replacementSubmit="async function submitStep(response){const step=steps[stepIndex];if(!(response.text||response.choice)){document.getElementById('tutorAnswer')?.focus();return;}const submit=document.getElementById('submitTutorAnswer');if(submit){submit.disabled=true;submit.textContent='Evaluating…';}try{const result=await core.evaluate(step,response,{exercise,answers});answers[step.id]=response.text||response.choice;renderFeedback(step,result,response);}catch(error){console.error('Adaptive Trainer evaluation failed:',error);if(submit){submit.disabled=false;submit.textContent='Submit thinking';}const box=document.getElementById('choiceBox');if(box)box.innerHTML='<div class=\"hint-panel\"><strong>Evaluation error</strong><p>The trainer could not evaluate this response. Your answer has not been scored.</p></div>';}}";
-    if(!code.includes(originalSubmit)) throw new Error('Tutor async integration guard failed: submitStep signature changed');
-    code=code.replace(originalSubmit,replacementSubmit);
-    const originalExport="ensureUI();window.CancellationHeartsTutor={core,start:startTutor};";
-    const lazyExport="ensureUI();window.CancellationHeartsTutor={get core(){return core;},start:startTutor,ensureInitialized,isInitialized(){return core!==null;},coreConstructionCount(){return coreConstructionCount;}};";
-    if(!code.includes(originalExport)) throw new Error('Tutor lazy-core integration guard failed: export signature changed');
-    code=code.replace(originalExport,lazyExport);
-    (0,eval)(code);
+  function markTutorUnavailable(){
+    const gameMode=document.getElementById('gameMode');
+    if(gameMode&&!gameMode.querySelector('option[value="tutor-unavailable"]')){
+      const o=document.createElement('option');
+      o.value='tutor-unavailable';o.textContent='Tutor mode (unavailable)';o.disabled=true;
+      gameMode.appendChild(o);
+    }
   }
 
-  try{
-    const parts=[];
-    for(const name of ['patch.part01','patch.part02','patch.part03']){
-      const r=await fetch(`causal/${name}`,{cache:'no-store'});
-      if(!r.ok) throw new Error(`Unable to load ${name}`);
-      parts.push((await r.text()).replace(/\s+/g,''));
-    }
-    const binary=atob(parts.join(''));
-    const bytes=new Uint8Array(binary.length);
-    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-    if(typeof DecompressionStream!=='function') throw new Error('This browser does not support gzip decompression.');
-    const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-    const code=await new Response(stream).text();
-    (0,eval)(code);
-    window.__causalPlannerLoaded=true;
-    if(typeof renderCoach==='function' && typeof state!=='undefined' && state.players?.length) renderCoach();
-  }catch(error){
-    console.error('Causal planner failed to load:',error);
-    window.__causalPlannerLoaded=false;
-  }
+  // hand-pathway-planner.js is a static <script> loaded in index.html, so
+  // buildHandPathway()/renderHandPathway() are already the enhanced versions
+  // by the time any classic script runs. __causalPlannerLoaded is kept for
+  // scripts/verify-browser-startup.mjs's diagnostic snapshot.
+  window.__causalPlannerLoaded=typeof buildHandPathway==='function'&&typeof spadeSystemAssessment==='function';
 
   try{
     loadStyle('tutor.css');
@@ -108,11 +67,12 @@
       registerTutorExtension('level-progression','tutor-level-progression.js'),
       registerTutorExtension('progress-tab','tutor-progress-tab.js')
     ]);
-    await loadAsyncTutorUI();
+    await loadScript('hearts-tutor.js');
     window.__adaptiveTutorLoaded=true;
     window.__adaptiveTutorArchitecture='adaptive-execution-pipeline-v2/domain-adapter-v5/assessment-core-v1/calibration-core-v1/me20-diagnostic+progress+passing+consistency/lazy-tutor-core-v1';
   }catch(error){
     console.error('Adaptive tutor failed to load:',error);
     window.__adaptiveTutorLoaded=false;
+    markTutorUnavailable();
   }
 })();

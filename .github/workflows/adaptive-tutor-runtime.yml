@@ -21,6 +21,7 @@ jobs:
           set -euo pipefail
           files=(
             app.js
+            hand-pathway-planner.js
             gameplay-standard-fixes.js
             gameplay-next-trick-flow.js
             gameplay-moon-fixes.js

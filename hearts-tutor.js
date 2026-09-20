@@ -1,11 +1,9 @@
 (function(){
   if(!window.AdaptiveCoach||!window.CancellationHeartsTutorAdapter) return;
   const {AdaptiveCoachCore,SELF_LEVELS}=window.AdaptiveCoach;
-  const core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);
+  let core=null;let coreConstructionCount=0;function ensureInitialized(){if(core)return core;core=new AdaptiveCoachCore(window.CancellationHeartsTutorAdapter);coreConstructionCount++;window.__CancellationHeartsTutorExtensions?.install?.();return core;}
   let exercise=null,stepIndex=0,answers={},walkthroughIndex=0;
-  const steps=[
-    {id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}
-  ];
+  const baseSteps=[{id:'objective',label:'1. Objective'},{id:'control',label:'2. Control state'},{id:'cards',label:'3. Cards that create it'},{id:'next',label:'4. Next objective'},{id:'preserve',label:'5. Preserve for later'}]; const developingSteps=[{id:'threat',label:'6. Threats'},{id:'pivot',label:'7. Contingency / pivot'}]; const advancedSteps=[{id:'observe',label:'8. What to watch for'},{id:'target',label:'9. Smart targeting'}]; let steps=[...baseSteps]; function stepsForLevel(){const level=core.profile.selfLevel||'beginner';if(level==='developing')return [...baseSteps,...developingSteps];if(level==='advanced'||level==='expert')return [...baseSteps,...developingSteps,...advancedSteps];return [...baseSteps];}
   function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
   function labelCard(code){return window.CancellationHeartsTutorAdapter.cardLabel(code);}
   function handStrip(compact=false,highlight=[]){
@@ -25,17 +23,17 @@
     if(btn)btn.addEventListener('click',e=>{if(document.getElementById('gameMode').value==='tutor'){e.stopImmediatePropagation();e.preventDefault();startTutor();}},true);
     if(gameMode){const old=gameMode.onchange;gameMode.onchange=function(){if(old)old.call(this);document.getElementById('newGameBtn').textContent=this.value==='tutor'?'Start Tutor':(this.value==='practice'?'Start Moon Practice':'Start New Game');};}
   }
-  function startTutor(){
+  function startTutor(){ensureInitialized();
     document.body.classList.add('tutor-mode-active');document.documentElement.classList.add('tutor-mode-active');window.scrollTo(0,0);
     document.getElementById('setup').classList.add('hidden');const game=document.getElementById('game');if(game)game.classList.add('hidden');document.getElementById('tutorRoot').classList.remove('hidden');
-    if(!core.profile.selfLevel)renderSelfAssessment();else beginExercise();
+    if(!core.state.diagnostic?.completed){const diagnostic=window.CancellationHeartsDiagnostic;if(!diagnostic)throw new Error('Opening diagnostic is not loaded');diagnostic.start({core,beginExercise});}else beginExercise();
   }
   function renderSelfAssessment(){
     const body=document.getElementById('tutorBody');
     body.innerHTML=`<div class="tutor-card"><h3>First, assess your current level</h3><p>This only sets the starting scaffolding. Your actual performance will quickly override it.</p><div class="level-grid">${Object.entries(SELF_LEVELS).map(([k,v])=>`<button class="level-choice" data-level="${k}"><strong>${v.label}</strong><span>${v.description}</span></button>`).join('')}</div></div>`;
     body.querySelectorAll('.level-choice').forEach(b=>b.onclick=()=>{core.selfAssess(b.dataset.level);beginExercise();});
   }
-  function beginExercise(){exercise=core.selectExercise();stepIndex=0;answers={};walkthroughIndex=0;renderExerciseIntro();window.scrollTo({top:0,behavior:'instant'});}
+  function beginExercise(){exercise=core.selectExercise();steps=stepsForLevel();stepIndex=0;answers={};walkthroughIndex=0;const finish=(updated)=>{if(updated)exercise=updated;renderExerciseIntro();window.scrollTo({top:0,behavior:'instant'});};const passing=window.CancellationHeartsPassingPhase;if(passing?.shouldRun(core.profile,exercise)){passing.start({core,exercise,onComplete:finish});return;}finish(exercise);}
   function validateWalkthrough(stages){
     const hand=new Set(exercise?.hand||[]);
     return stages.map(stage=>({...stage,highlight:(stage.highlight||[]).filter(c=>hand.has(c))}));
@@ -83,7 +81,7 @@
   }
   function renderChoices(choices){const box=document.getElementById('choiceBox');if(!box)return;box.innerHTML=`<div class="fallback-box"><p><strong>Fallback choices</strong></p>${choices.map((x,i)=>`<button class="choice-option" data-i="${i}">${esc(x)}</button>`).join('')}</div>`;box.querySelectorAll('.choice-option').forEach(b=>b.onclick=()=>submitStep({choice:choices[+b.dataset.i]}));}
   function skillKeys(id){return {objective:['objective_reasoning','causal_planning_state_transition'],control:['control_reasoning','causal_planning_control_requirements'],cards:['entry_selection','queen_structure','effective_winner_reasoning'],next:['useful_void_reasoning','causal_planning_state_transition'],preserve:['exit_preservation','causal_planning_preservation']}[id]||['hand_reading'];}
-  function submitStep(response){const step=steps[stepIndex];if(!(response.text||response.choice)){document.getElementById('tutorAnswer')?.focus();return;}const result=core.evaluate(step,response,{exercise,answers});answers[step.id]=response.text||response.choice;renderFeedback(step,result,response);}
+  async function submitStep(response){const step=steps[stepIndex];if(!(response.text||response.choice)){document.getElementById('tutorAnswer')?.focus();return;}const submit=document.getElementById('submitTutorAnswer');if(submit){submit.disabled=true;submit.textContent='Evaluating…';}try{const result=await core.evaluate(step,response,{exercise,answers});answers[step.id]=response.text||response.choice;renderFeedback(step,result,response);}catch(error){console.error('Adaptive Trainer evaluation failed:',error);if(submit){submit.disabled=false;submit.textContent='Submit thinking';}const box=document.getElementById('choiceBox');if(box)box.innerHTML='<div class="hint-panel"><strong>Evaluation error</strong><p>The trainer could not evaluate this response. Your answer has not been scored.</p></div>';}}
   function renderFeedback(step,result,response){
     const body=document.getElementById('tutorBody');const level=result.score>=0.8?'Strong reasoning':result.score>=0.58?'Good start':'Needs another look';
     body.innerHTML=`${handStrip(true)}<div class="tutor-grid"><div class="tutor-card"><div class="feedback-badge score-${result.score>=0.8?'high':result.score>=0.58?'mid':'low'}">${level}</div><h3>Your thinking</h3><p>${esc(response.text||response.choice)}</p><h3>Tutor feedback</h3><p>${esc(result.feedback)}</p>${result.score<0.58?`<div class="hint-panel"><strong>Scaffold</strong><p>${esc(hintFor(step.id))}</p></div>`:''}<div class="tutor-actions"><button id="continueTutor" class="primary">${stepIndex===steps.length-1?'Review full pathway':'Continue'}</button>${result.score<0.5?'<button id="retryTutor" class="secondary">Revise answer</button>':''}</div></div><div class="tutor-card pathway-live"><h3>Your developing pathway</h3>${renderPathwaySoFar()}</div></div>`;
@@ -92,5 +90,5 @@
   function hintFor(id){return {objective:'Do not start with the shortest suit or highest card. Ask what future problem is most likely to trap you.',control:'Ask whether winning the lead helps the objective or merely gives opponents a chance to dump points on you.',cards:'Name the exact cards doing jobs: protection, entry, exit, or future-winner liability.',next:'A successful phase should create a new opportunity. What becomes possible only after X succeeds?',preserve:'Which low or control card looks expendable now but has a job in the next phase?'}[id]||'Work backward from the future position you want.';}
   function renderPathwaySoFar(){const labels={objective:'I want to accomplish X',control:'To accomplish X, I need',cards:'I can obtain that state with',next:'Once X happens, my next objective becomes Y',preserve:'These cards must be preserved because Y depends on them'};return steps.map(s=>`<div class="pathway-line"><span>${labels[s.id]}</span><strong>${esc(answers[s.id]||'…')}</strong></div>`).join('');}
   function renderReview(){const expert=window.CancellationHeartsTutorAdapter.expertModel(exercise);const body=document.getElementById('tutorBody');const weak=core.masterySummary().slice(0,4);body.innerHTML=`${handStrip(true)}<div class="tutor-grid"><div class="tutor-card"><h3>Your pathway</h3>${renderPathwaySoFar()}<h3>Expert pathway</h3><ol>${expert.pathway.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${renderFullExpertReference(expert)}</div><div class="tutor-card"><h3>Adaptive profile</h3><p>The tutor will use these estimates to choose how much scaffolding and what kind of next hand you receive.</p>${weak.map(x=>`<div class="mastery-row"><span>${esc(x.skill.replaceAll('_',' '))}</span><strong>${Math.round(x.value*100)}%</strong></div>`).join('')}<button id="nextTutorHand" class="primary">Next hand</button></div></div>`;document.getElementById('nextTutorHand').onclick=beginExercise;}
-  ensureUI();window.CancellationHeartsTutor={core,start:startTutor};
+  ensureUI();window.CancellationHeartsTutor={get core(){return core;},start:startTutor,ensureInitialized,isInitialized(){return core!==null;},coreConstructionCount(){return coreConstructionCount;}};
 })();

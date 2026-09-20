@@ -2,10 +2,9 @@
 // deployment channel (the retired apply-strategic-deploy.yml pattern): a
 // `deploy/` directory of chunked blobs decoded straight into tracked source
 // files by CI, bypassing normal PR review. See git history: "Deploy strategic
-// coach build". This deliberately does NOT flag chunked assets loaded at
-// runtime by the app itself (e.g. causal/patch.part*) — that's a separate,
-// tracked concern (see the app rebuild plan, Phase 4), not a CI source-overwrite
-// mechanism.
+// coach build". A second, runtime instance of this pattern (causal/patch.part*,
+// fetched/decoded/eval()'d by causal-loader.js) was removed in the app-layer
+// rebuild's Phase 4 — the app no longer loads any compressed source payload.
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 
