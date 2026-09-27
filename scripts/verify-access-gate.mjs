@@ -13,7 +13,7 @@ function chromeBinary(){const bins=[process.env.CHROME_BIN,'google-chrome-stable
 async function waitForDebugPort(profile,chrome,stderr){const file=join(profile,'DevToolsActivePort');for(let i=0;i<150;i++){if(existsSync(file)){const port=Number(readFileSync(file,'utf8').split(/\r?\n/)[0]);if(Number.isInteger(port)&&port>0)return port;}if(chrome.exitCode!==null)throw new Error(`Chrome exited before DevTools started: ${stderr().slice(-1000)}`);await sleep(100);}throw new Error('Chrome DevTools endpoint did not start');}
 async function openTarget(port){const r=await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'});if(!r.ok)throw new Error(`Unable to create Chrome target (${r.status})`);return r.json();}
 async function browserSession(port){const target=await openTarget(port);const ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');let nextId=0;const pending=new Map();ws.addEventListener('message',event=>{const msg=JSON.parse(String(event.data));if(msg.id&&pending.has(msg.id)){const {resolve,reject,timer}=pending.get(msg.id);clearTimeout(timer);pending.delete(msg.id);msg.error?reject(new Error(msg.error.message)):resolve(msg.result);}});const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;const timer=setTimeout(()=>{pending.delete(id);reject(new Error(`DevTools command timed out: ${method}`));},6000);pending.set(id,{resolve,reject,timer});ws.send(JSON.stringify({id,method,params}));});const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result?.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result?.result?.value;};await send('Runtime.enable');await send('Page.enable');return{ws,send,evaluate};}
-async function waitFor(evaluate,expression,label){for(let i=0;i<100;i++){const value=await evaluate(expression);if(value)return value;await sleep(100);}throw new Error(`${label}: condition did not become ready`);}
+async function waitFor(evaluate,expression,label,tries=100){for(let i=0;i<tries;i++){const value=await evaluate(expression);if(value)return value;await sleep(100);}throw new Error(`${label}: condition did not become ready`);}
 
 const server=createServer((req,res)=>{try{
   const requested=new URL(req.url,'http://localhost').pathname;
@@ -41,7 +41,8 @@ try{
   accessMode='authorized';
   {
     const {ws,send,evaluate}=await browserSession(debugPort);await send('Page.navigate',{url:baseUrl});
-    await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'`,'active learner');
+    // unlock() now also waits for causal-loader.js's Tutor stack to settle (Phase 6).
+    await waitFor(evaluate,`document.documentElement?.dataset?.ulsAccess==='active'`,'active learner',150);
     let snapshot=JSON.parse(await evaluate(`JSON.stringify({gate:document.documentElement?.dataset?.ulsAccess??null,overlay:!!document.getElementById('ulsAccessGate'),hidden:document.getElementById('app')?.getAttribute('aria-hidden'),inert:document.getElementById('app')?.inert})`));
     if(snapshot.gate!=='active'||snapshot.overlay||snapshot.hidden==='true'||snapshot.inert===true)throw new Error(`active learner: app did not unlock ${JSON.stringify(snapshot)}`);
 
