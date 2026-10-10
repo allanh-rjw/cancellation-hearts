@@ -40,9 +40,22 @@ for(const signature of [
   "state.openingLeadSuit='C';",
   "if(twoClubs.length) return twoClubs;",
   "function heartDiscardBreaks(card,ledSuit)",
-  "if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;",
   "state.carryoverPoints+=trickPoints;"
 ])assert.ok(appSource.includes(signature),`real app rule boundary changed: ${signature}`);
+
+// Since 3d6bc44 the live play engine (hand mutation, hearts breaking, cancellation) is playCardEngine in
+// gameplay-standard-fixes.js, published as playCard; gameplay-rule-invariants.js wraps that engine. Check the
+// boundary in the file that owns it, and that index.html loads the owners in dependency order.
+const source=(file)=>readFileSync(new URL(`../${file}`,import.meta.url),"utf8");
+const engineSource=source("gameplay-standard-fixes.js");
+const engineStart=engineSource.indexOf("function playCardEngine(playerIndex,card){");
+const heartsBreak=engineSource.indexOf("if(heartDiscardBreaks(card,currentLedSuit())) state.heartsBroken=true;",engineStart);
+const published=engineSource.indexOf("playCard=playCardEngine;",heartsBreak);
+assert.ok(engineStart>=0&&heartsBreak>engineStart&&published>heartsBreak,"real app rule boundary changed: playCardEngine no longer breaks hearts before publishing playCard");
+assert.ok(source("gameplay-rule-invariants.js").includes("const basePlayCard=playCardEngine;"),"real app rule boundary changed: rule invariants no longer wrap playCardEngine");
+const page=source("index.html");
+const loaded=(file)=>page.indexOf(`<script src="${file}?`);
+assert.ok(loaded("app.js")>=0&&loaded("app.js")<loaded("gameplay-standard-fixes.js")&&loaded("gameplay-standard-fixes.js")<loaded("gameplay-rule-invariants.js"),"real app load order changed: app.js, gameplay-standard-fixes.js, gameplay-rule-invariants.js");
 
 // Canonical rule edge cases are executed by the Domain Pack while the source
 // signatures above prove the real app still exposes the corresponding game
