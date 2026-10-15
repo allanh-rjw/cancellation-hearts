@@ -31,7 +31,8 @@ async function waitFor(evaluate,expression,label,{tries=100,delay=100}={}){for(l
 async function inspectOrdinaryMode(port,baseUrl,{label,path,expectedMode}){
   const {ws,exceptions,send,evaluate}=await browserSession(port,label);
   await send('Page.navigate',{url:`${baseUrl}/${path}`});
-  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r||document.documentElement?.dataset?.ulsAccess!=='active')return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,access:document.documentElement.dataset.ulsAccess,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${label} startup`);
+  // unlock() now also waits for causal-loader.js's Tutor stack to settle (Phase 6).
+  const raw=await waitFor(evaluate,`(()=>{const r=window.CancellationHeartsLearningRuntime?.status?.();if(document.readyState!=='complete'||!r||document.documentElement?.dataset?.ulsAccess!=='active')return '';return JSON.stringify({setup:!!document.getElementById('setup'),setupHidden:document.getElementById('setup')?.classList.contains('hidden')??null,passwordGate:!!document.getElementById('passwordGate'),appHidden:document.getElementById('app')?.getAttribute('aria-hidden')??null,access:document.documentElement.dataset.ulsAccess,gateway:window.__cancellationHeartsLearningGateway??null,runtime:r});})()`,`${label} startup`,{tries:150});
   const snapshot=JSON.parse(raw);
   if(!snapshot.setup||snapshot.setupHidden)throw new Error(`${label}: setup screen did not initialize`);
   if(snapshot.passwordGate)throw new Error(`${label}: obsolete password gate is still present`);
